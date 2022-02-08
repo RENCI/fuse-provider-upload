@@ -1,0 +1,41 @@
+{
+  "access_methods": [
+    {
+      "access_id": "string",
+      "access_url": {
+        "headers": "Authorization: Basic Z2E0Z2g6ZHJz",
+        "url": "string"
+      },
+      "region": "us-east-1",
+      "type": "s3"
+    }
+  ],
+  "aliases": [
+    "string"
+  ],
+  "checksums": [
+    {
+      "checksum": "string",
+      "type": "sha-256"
+    }
+  ],
+  "contents": [
+    {
+      "contents": [
+        "string"
+      ],
+      "drs_uri": "drs://drs.example.org/314159",
+      "id": "string",
+      "name": "string"
+    }
+  ],
+  "created_time": "xxx",
+  "description": "string",
+  "id": "string",
+  "mime_type": "application/json",
+  "name": "string",
+  "self_uri": "drs://drs.example.org/314159",
+  "size": 0,
+  "updated_time": "xxx",
+  "version": "string"
+}

@@ -1,0 +1,59 @@
+{
+  "id":  "fuse-provider-template",
+  "name": "Example of a FUSE data provider",
+  "description": "Serves data according to DRS specification",
+  "type": {
+    "group": "org.ga4gh",
+    "artifact": "drs",
+    "version": "1.0.0"
+  },
+  "organization": {
+    "name": "RENCI",
+    "url": "https://renci.org"
+  },
+  "contactUrl": "mailto:krobasky@gmail.com",
+  "documentationUrl": "https://github.com/krobasky/fuse-provider-template",
+  "createdAt": "2022-02-07T12:00:00Z",
+  "updatedAt": "2022-02-07T12:00:00Z",
+  "environment": "test",
+  "version": "1.0.0",
+  "_comment": "-------End of GA4GH requirements----- (ignore this line)",
+  "title": "Generic server type appliance",
+  "serviceDependencies": [],
+  "serviceType": "p",
+  "serviceTypeTitle": "Provider",
+  "settingsDefaults": {
+    "serviceParameters": [
+      {
+        "id": "FUSE:baseURL",
+        "title": "Base URL",
+        "description": "The URL, minus the protocol.",
+        "value": "www.immunespace.org",
+        "type": "string"
+      },
+      {
+        "id": "FUSE:Test",
+        "title": "Test mode",
+        "description": "Don't actually download or cause any side-effects.",
+        "value": "FALSE",
+        "type": "string"
+      }
+    ],
+    "objectVariables": [
+      {
+        "id": "FUSE:APIKey",
+        "title": "API Key",
+        "description": "User's API Key for this server (xxx maybe provide instructions for retrieving the API key)",
+        "value": "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+        "type": "string"
+      },
+      {
+        "id": "FUSE:foreignDatasetID",
+        "title": "Foreign dataset ID",
+        "description": "A unique label that the remote host uses to identify the requested dataset.",
+        "value": "SDY61-9",
+        "type": "string"
+      }
+    ]
+  }
+}
