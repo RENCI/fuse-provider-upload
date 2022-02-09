@@ -1,9 +1,8 @@
 version: '3.8'
 services:
-  fuse-provider-template:
-    container_name: fuse-provider-template
+  fuse-provider-upload:
+    container_name: fuse-provider-upload
     build: .
-    restart: always
     env_file: .env
     ports:
         - ${API_PORT}:8000

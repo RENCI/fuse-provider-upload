@@ -43,11 +43,11 @@ git clone --recursive http://github.com/RENCI/<your-repo-name>
 * Make sure the tests pass (`./up.sh; prove` - see "validate installation" below to install test harness dependencies)
 * Edit this README.md file and replace all occurrences of `fuse-provider-template` with your repo's name
 * Update the source files appropriately:
- - [ ] **config/server-info.json**: describe your service's pluginType ["p":"Provider", "m":"Mapper", "t":"Tool"], required parameters, and supported/required objectVariables. Add anything required by GA4GH's DRS API
- - [ ] **docker-compose.yml**: replace `fuse-provider-template` with your repo's name and customize accordingly
- - [ ] **requirements.txt**: add your *version-locked* library requirements to the list
- - [ ] **sample.env**: add any required environmental variables, don't forget to also document them in this readme
- - [ ] **main.py**: 
+ - [x] **config/server-info.json**: describe your service's pluginType ["p":"Provider", "m":"Mapper", "t":"Tool"], required parameters, and supported/required objectVariables. Add anything required by GA4GH's DRS API
+ - [x] **docker-compose.yml**: replace `fuse-provider-template` with your repo's name and customize accordingly
+ - [x] **requirements.txt**: add your *version-locked* library requirements to the list
+ - [x] **sample.env**: add any required environmental variables, don't forget to also document them in this readme
+ - [x] **main.py**: 
    - [ ] Search for all occurrences of `fuse-provider-template` and replace
    - [ ] Define and add endpoints for your service
    - [ ] Create functions in ./lib to support you endpoints, with unit tests, adding the unit tests to github actions (examples coming soon!)

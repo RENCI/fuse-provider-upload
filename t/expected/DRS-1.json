@@ -3,9 +3,9 @@
   "contactUrl": "mailto:krobasky@gmail.com",
   "createdAt": "xxx",
   "description": "Serves data according to DRS specification",
-  "documentationUrl": "https://github.com/krobasky/fuse-provider-template",
+  "documentationUrl": "https://github.com/krobasky/fuse-provider-upload",
   "environment": "test",
-  "id": "fuse-provider-template",
+  "id": "fuse-provider-upload",
   "name": "Example of a FUSE data provider",
   "organization": {
     "name": "RENCI",
