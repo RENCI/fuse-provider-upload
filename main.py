@@ -62,23 +62,28 @@ import pathlib
 import json
 
 # xxx check File is an archive
-@app.post("/submit", description="")
-async def upload(email: str = Query(default=None, description="email of the user"),
+@app.post("/submit", description="Submit a digital object to be stored by this data provider")
+async def upload(submitter_id: str = Query(default=None, description="unique identifier for the submitter (e.g., email)"),
+                 apikey: str = Query(default=None, description="optional API key for submitter to provide for using this or any third party apis required for submitting the object"),
+                 requested_object_id: str = Query(default=None, description="optional argument to be used by submitter to request an object_id; this could be, for example, used to retrieve objects from a 3rd party for which this endpoint is a proxy. The requested object_id is not guaranteed, enduser should check return value for final object_id used."),
                  archive: UploadFile = File(...)):
+    '''
+    Parameters such as username/email for the submitter and parameter formats will be returned by the service-info endpoint to allow dynamic construction of dashboard elements
+    '''
     # write data to memory
     local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-    object_id = "upload_" + email + "_" + str(uuid.uuid4())
+    object_id = "upload_" + submitter_id + "_" + str(uuid.uuid4())
 
     # instantiate task
     # xxx throws error: TypeError: cannot serialize '_io.BufferedRandom' object
     # xxx without 'archive', error: redis.exceptions.ConnectionError: Error -2 connecting to redis:6379. Name or service not known.
-    q.enqueue(run_upload, args=(object_id, email, archive), job_id=object_id, job_timeout=3600, result_ttl=-1)
+    q.enqueue(run_upload, args=(object_id, submitter_id, archive), job_id=object_id, job_timeout=3600, result_ttl=-1)
     p_worker = Process(target=initWorker)
     p_worker.start()
     return {"object_id": object_id}
 
 # xxx check param defaults
-async def run_upload(object_id: str = None, email: str = None, archive: UploadFile=File(...)):
+async def run_upload(object_id: str = None, submitter_id: str = None, archive: UploadFile=File(...)):
     local_path = os.getenv('HOST_ABSOLUTE_PATH')
 
     job = Job.fetch(object_id, connection=redis_connection)
@@ -88,7 +93,7 @@ async def run_upload(object_id: str = None, email: str = None, archive: UploadFi
 
     # xxx enqueue the following in the case of very large files
     # xxx break this out into registry service
-    task_mapping_entry = {"task_id": task_id, "email": email, "status": None, "stderr": None, "date_created": datetime.datetime.utcnow(), "start_date": None, "end_date": None}
+    task_mapping_entry = {"task_id": task_id, "submitter_id": submitter_id, "status": None, "stderr": None, "date_created": datetime.datetime.utcnow(), "start_date": None, "end_date": None}
     mongo_db_datasets_column.insert_one(task_mapping_entry)
 
     
@@ -107,9 +112,9 @@ async def run_upload(object_id: str = None, email: str = None, archive: UploadFi
     return {"object_id": object_id}
 
 
-@app.get("/objects/{email}", summary="Get infos for all the DrsObject for this email.")
-async def objects(email: str = Path(default="", description="email of user that uploaded the archive")):
-    query = {"email": email}
+@app.get("/objects/search/{submitter_id}", summary="Get infos for all the DrsObject for this submitter_id.")
+async def objects_search(submitter_id: str = Path(default="", description="submitter_id of user that uploaded the archive")):
+    query = {"submitter_id": submitter_id}
     ret = list(map(lambda a: a, mongo_db_datasets_column.find(query, {"_id": 0, "object_id": 1})))
     return ret
 
@@ -123,7 +128,7 @@ def upload_status(object_id: str):
             # If job failed, add more detail
             # xxx break this out into common registry service
             upload_query = {"object_id": object_id}
-            projection = {"_id": 0, "email": 1, "status": 1, "stderr": 1, "date_created": 1, "start_date": 1, "end_date": 1}
+            projection = {"_id": 0, "submitter_id": 1, "status": 1, "stderr": 1, "date_created": 1, "start_date": 1, "end_date": 1}
             entry = mongo_db_upload_column.find(upload_query, projection)
             ret =  {
                 "status": status,
