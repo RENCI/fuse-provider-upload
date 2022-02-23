@@ -58,9 +58,15 @@ app.add_middleware(
 import pathlib
 import json
 
+# API is described in:
+# http://localhost:8083/openapi.json
+# Therefore:
+# This endpoint self-describes with:
+# curl -X 'GET'    'http://localhost:8083/openapi.json' -H 'accept: application/json' 2> /dev/null |python -m json.tool |jq '.paths."/submit".post.parameters' -C |less
+# for example, an array of parameter names can be retrieved with:
+# curl -X 'GET'    'http://localhost:8083/openapi.json' -H 'accept: application/json' 2> /dev/null |python -m json.tool |jq '.paths."/submit".post.parameters[].name' 
 @app.post("/submit", description="Submit a digital object to be stored by this data provider")
 async def upload(submitter_id: str = Query(default=None, description="unique identifier for the submitter (e.g., email)"),
-                 apikey: str = Query(default=None, description="optional API key for submitter to provide for using this or any third party apis required for submitting the object"),
                  requested_object_id: str = Query(default=None, description="optional argument to be used by submitter to request an object_id; this could be, for example, used to retrieve objects from a 3rd party for which this endpoint is a proxy. The requested object_id is not guaranteed, enduser should check return value for final object_id used."),
                  archive: UploadFile = File(...)):
     '''
