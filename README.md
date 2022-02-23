@@ -32,30 +32,6 @@ sudo curl -L https://github.com/docker/compose/releases/download/${VERSION}/dock
 sudo chmod 755 $DESTINATION
 ```
 
-## use this template:
-
-Note, a service must specify a pluginType, so for the purpose of this demonstration we use type 'p' (for data 'Provider')
-* To add a new repository to the RENCI organization, [click here](https://github.com/organizations/RENCI/repositories/new) and select this repo for the template, otherwise the new repo will be added to your username.
-* Clone your new repo using the 'recursive' tag (see below)
-```
-git clone --recursive http://github.com/RENCI/<your-repo-name>
-```
-* Make sure the tests pass (`./up.sh; prove` - see "validate installation" below to install test harness dependencies)
-* Edit this README.md file and replace all occurrences of `fuse-provider-template` with your repo's name
-* Update the source files appropriately:
- - [x] **config/server-info.json**: describe your service's pluginType ["p":"Provider", "m":"Mapper", "t":"Tool"], required parameters, and supported/required objectVariables. Add anything required by GA4GH's DRS API
- - [x] **docker-compose.yml**: replace `fuse-provider-template` with your repo's name and customize accordingly
- - [x] **requirements.txt**: add your *version-locked* library requirements to the list
- - [x] **sample.env**: add any required environmental variables, don't forget to also document them in this readme
- - [x] **main.py**: 
-   - [ ] Search for all occurrences of `fuse-provider-template` and replace
-   - [ ] Define and add endpoints for your service
-   - [ ] Create functions in ./lib to support you endpoints, with unit tests, adding the unit tests to github actions (examples coming soon!)
- - [ ] **write and run tests against the deployed containers - look at t/*.t for examples
- - [ ] contact the dockerhub/txscience organization administrator (email:txscience@lists.renci.org) to add a dockerhub repo for your container, if needed
-* remove this section from the README.md
-* checkin your mods to a branch and issue a pull request
-
 ## configuration
 
 1. Get this repository:
