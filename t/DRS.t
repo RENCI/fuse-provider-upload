@@ -58,7 +58,7 @@ $fn = "DRS-2.json";
 generalize_output($fn, cmd("GET", rawf($fn), "objects/{$OBJID}"), ["created_time", "updated_time"]);
 files_eq(f($fn), "t/out/${fn}",                                                    "Get info about DRS object");
 $fn = "DRS-3.json";
-generalize_output($fn, cmd("POST", rawf($fn), "objects/{$OBJID}", $PASSPORTS), ["created_time", "updated_time"]);
+generalize_output($fn, cmd("POST", rawf($fn), "objects/{$OBJID}", "-d '$PASSPORTS'"), ["created_time", "updated_time"]);
 files_eq(f($fn), "t/out/${fn}",                                                     "Get info about DRS object through POST-ing a Passport");
 $fn = "DRS-4.json";
 files_eq(f($fn), cmd("GET",$fn, "objects/{$OBJID}/access/{$ACCESSID}"),             "Get URL for fetching bytes");

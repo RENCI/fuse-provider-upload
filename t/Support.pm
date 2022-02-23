@@ -25,15 +25,14 @@ sub cleanup_out {
     }
 }
 
-
 sub cmd {
     my ($type, $fn, $endpoint, $post_args) = @_;
     
     my $cmd;
     switch($type) {
-    	case "DELETE" { $cmd=sprintf("curl -X 'DELETE' '${HOST_PATH}/%s' -H 'accept: application/json'", $endpoint); }
-	case "GET"    { $cmd=sprintf("curl -X 'GET'    '${HOST_PATH}/%s' -H 'accept: application/json'", $endpoint); }
-	case "POST"   { $cmd=sprintf("curl -X 'POST'   '${HOST_PATH}/%s' -H 'accept: application/json' -d '%s'", $endpoint, $post_args);}
+    	case "DELETE" { $cmd=sprintf("curl -X 'DELETE'  '${HOST_PATH}/%s' -H 'accept: application/json'", $endpoint); }
+	case "GET"    { $cmd=sprintf("curl -X 'GET'     '${HOST_PATH}/%s' -H 'accept: application/json'", $endpoint); }
+	case "POST"  { $cmd=sprintf("curl -X 'POST' %s '${HOST_PATH}/%s' -H 'accept: application/json'", $post_args, $endpoint);}
 	else { print("+! [cmd] ERROR ${type} not recognized.\n");	}
     }
 
