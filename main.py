@@ -30,10 +30,10 @@ logger = logging.getLogger("fuse-provider-upload")
 # https://stackoverflow.com/questions/63510041/adding-python-logging-to-fastapi-endpoints-hosted-on-docker-doesnt-display-api
 
 import pymongo
-#mongo_client = pymongo.MongoClient('mongodb://%s:%s@tx-persistence:27018/test' % (os.getenv('MONGO_NON_ROOT_USERNAME'), os.getenv('MONGO_NON_ROOT_PASSWORD')))
+#mongo_client = pymongo.MongoClient('mongodb://%s:%s@upload-tx-persistence:27018/test' % (os.getenv('MONGO_NON_ROOT_USERNAME'), os.getenv('MONGO_NON_ROOT_PASSWORD')))
 #mongo_db = mongo_client["test"]
 #mongo_db_datasets_column = mongo_db["uploads"]
-mongo_client = pymongo.MongoClient('mongodb://%s:%s@tx-persistence:27017/test' % (os.getenv('MONGO_NON_ROOT_USERNAME'), os.getenv('MONGO_NON_ROOT_PASSWORD')))
+mongo_client = pymongo.MongoClient('mongodb://%s:%s@upload-tx-persistence:27017/test' % (os.getenv('MONGO_NON_ROOT_USERNAME'), os.getenv('MONGO_NON_ROOT_PASSWORD')))
 mongo_db = mongo_client.test
 mongo_uploads=mongo_db.uploads
 
