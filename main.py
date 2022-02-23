@@ -11,34 +11,31 @@ import pymongo
 
 from docker.errors import ContainerError
 from fastapi import FastAPI, Depends, Path, Query, Body, File, UploadFile
+from fastapi import  Form, HTTPException
 from fastapi.logger import logger
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse
 
 from bson.json_util import dumps, loads
 
+import traceback
+
 from fuse.models.Objects import Passports, ProviderExampleObject
+from logging.config import dictConfig
+import logging
+from fuse.models.Config import LogConfig
 
-#------------------
-# xxx separate registry service
+dictConfig(LogConfig().dict())
+logger = logging.getLogger("fuse-provider-upload")
+# https://stackoverflow.com/questions/63510041/adding-python-logging-to-fastapi-endpoints-hosted-on-docker-doesnt-display-api
+
 import pymongo
-mongo_client = pymongo.MongoClient('mongodb://%s:%s@tx-persistence:27018/test' % (os.getenv('MONGO_NON_ROOT_USERNAME'), os.getenv('MONGO_NON_ROOT_PASSWORD')))
-mongo_db = mongo_client["test"]
-mongo_db_datasets_column = mongo_db["uploads"]
-
-# xxx separate queue service
-from redis import Redis
-from rq import Queue, Worker
-from rq.job import Job
-# queue
-redis_connection = Redis(host='redis', port=6379, db=0)
-q = Queue(connection=redis_connection, is_async=True, default_timeout=3600)
-def initWorker():
-    worker = Worker(q, connection=redis_connection)
-    worker.work()
-
-#------------------
-
+#mongo_client = pymongo.MongoClient('mongodb://%s:%s@tx-persistence:27018/test' % (os.getenv('MONGO_NON_ROOT_USERNAME'), os.getenv('MONGO_NON_ROOT_PASSWORD')))
+#mongo_db = mongo_client["test"]
+#mongo_db_datasets_column = mongo_db["uploads"]
+mongo_client = pymongo.MongoClient('mongodb://%s:%s@tx-persistence:27017/test' % (os.getenv('MONGO_NON_ROOT_USERNAME'), os.getenv('MONGO_NON_ROOT_PASSWORD')))
+mongo_db = mongo_client.test
+mongo_uploads=mongo_db.uploads
 
 app = FastAPI()
 
@@ -61,7 +58,6 @@ app.add_middleware(
 import pathlib
 import json
 
-# xxx check File is an archive
 @app.post("/submit", description="Submit a digital object to be stored by this data provider")
 async def upload(submitter_id: str = Query(default=None, description="unique identifier for the submitter (e.g., email)"),
                  apikey: str = Query(default=None, description="optional API key for submitter to provide for using this or any third party apis required for submitting the object"),
@@ -70,78 +66,44 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
     '''
     Parameters such as username/email for the submitter and parameter formats will be returned by the service-info endpoint to allow dynamic construction of dashboard elements
     '''
-    # write data to memory
-    local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-    object_id = "upload_" + submitter_id + "_" + str(uuid.uuid4())
-
-    # instantiate task
-    # xxx throws error: TypeError: cannot serialize '_io.BufferedRandom' object
-    # xxx without 'archive', error: redis.exceptions.ConnectionError: Error -2 connecting to redis:6379. Name or service not known.
-    q.enqueue(run_upload, args=(object_id, submitter_id, archive), job_id=object_id, job_timeout=3600, result_ttl=-1)
-    p_worker = Process(target=initWorker)
-    p_worker.start()
-    return {"object_id": object_id}
+    try:
+        object_id = "upload_" + submitter_id + "_" + str(uuid.uuid4())
+        logger.info(msg=f"[upload]object_id="+str(object_id))
+        row_id = mongo_uploads.insert_one(
+            {"object_id": object_id, "submitter_id": submitter_id, "status": None, "stderr": None, "date_created": datetime.datetime.utcnow(), "start_date": None, "end_date": None}
+        ).inserted_id
+        logger.info(msg=f"[upload] new row_id = " + str(row_id))
+        local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        local_path = os.path.join(local_path, f"{object_id}-data")
+        os.mkdir(local_path)
+        logger.info(msg=f"[upload] localpath = "+str(local_path))
+        file_path = os.path.join(local_path, "upload.gz")
+        logger.info(msg=f"[upload] filepath = "+str(file_path))
+        async with aiofiles.open(file_path, 'wb') as out_file:
+            content = await archive.read()
+            await out_file.write(content)
+        mongo_uploads.update_one({"object_id": object_id},
+                                 {"$set": {"start_date": datetime.datetime.utcnow(), "status": "completed"}})
+        ret_val = {"object_id": object_id}
+        logger.info(msg=f"[upload] returning: " + str(ret_val))
+        return ret_val
+    except Exception as e:
+        raise HTTPException(status_code=404,
+                            detail="! Exception {0} occurred while running upload for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
 
 # xxx check param defaults
-async def run_upload(object_id: str = None, submitter_id: str = None, archive: UploadFile=File(...)):
-    local_path = os.getenv('HOST_ABSOLUTE_PATH')
-
-    job = Job.fetch(object_id, connection=redis_connection)
-    task_mapping_entry = {"object_id": object_id}
-    new_values = {"$set": {"start_date": datetime.datetime.utcnow(), "status": job.get_status()}} # xxx status = started?
-    mongo_db_datasets_column.update_one(task_mapping_entry, new_values)
-
-    # xxx enqueue the following in the case of very large files
-    # xxx break this out into registry service
-    task_mapping_entry = {"task_id": task_id, "submitter_id": submitter_id, "status": None, "stderr": None, "date_created": datetime.datetime.utcnow(), "start_date": None, "end_date": None}
-    mongo_db_datasets_column.insert_one(task_mapping_entry)
-
-    
-    local_path = os.path.join(local_path, f"{object_id}-data")
-    os.mkdir(local_path)
-
-    # xxxget filename? Use queue?
-    file_path = os.path.join(local_path, "upload.gz")
-    async with aiofiles.open(file_path, 'wb') as out_file:
-        content = await archive.read()
-        await out_file.write(content)
-
-    new_values = {"$set": {"start_date": datetime.datetime.utcnow(), "status": "completed"}}
-    mongo_db_datasets_column.update_one(task_mapping_entry, new_values)
-    #xxx catch errors
-    return {"object_id": object_id}
-
-
 @app.get("/objects/search/{submitter_id}", summary="Get infos for all the DrsObject for this submitter_id.")
 async def objects_search(submitter_id: str = Path(default="", description="submitter_id of user that uploaded the archive")):
-    query = {"submitter_id": submitter_id}
-    ret = list(map(lambda a: a, mongo_db_datasets_column.find(query, {"_id": 0, "object_id": 1})))
-    return ret
-
-@app.get("/objects/status/{object_id}")
-def upload_status(object_id: str):
     try:
-        # xxx break this out into common queue service
-        job = Job.fetch(object_id, connection=redis_connection)
-        status = job.get_status()
-        if (status == "failed"):
-            # If job failed, add more detail
-            # xxx break this out into common registry service
-            upload_query = {"object_id": object_id}
-            projection = {"_id": 0, "submitter_id": 1, "status": 1, "stderr": 1, "date_created": 1, "start_date": 1, "end_date": 1}
-            entry = mongo_db_upload_column.find(upload_query, projection)
-            ret =  {
-                "status": status,
-                "message":loads(dumps(entry.next()))
-            }
-        else:
-            ret = {"status": status}
-
-        mongo_db_datasets_column.update_one({"object_id": object_id}, {"$set": ret})
+        logger.info(msg=f"[objects_search] submitter_id:" + str(submitter_id))
+        ret = list(map(lambda a: a, mongo_uploads.find({"submitter_id": submitter_id},
+                                                       {"_id": 0, "object_id": 1})))
+        logger.info(msg=f"[objects_search] ret:" + str(ret))
         return ret
     except Exception as e:
         raise HTTPException(status_code=404,
-                            detail="! Exception {0} occurred while checking job status for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), e, traceback.format_exc(), object_id))
+                            detail="! Exception {0} occurred while searching for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), e, traceback.format_exc(), object_id))
+                       
 
 @app.delete("/delete/{object_id}", summary="DANGER ZONE: Delete a downloaded object; this action is rarely justified.")
 async def delete(object_id: str):
@@ -165,7 +127,7 @@ async def delete(object_id: str):
     ret_job=""
     ret_job_err=""
     try:
-        job = Job.fetch(immunespace_download_id, connection=redis_connection)
+        job = Job.fetch(object_id, connection=redis_connection)
         if job == None:
             ret_job="No job found in queue. \n"
         else:
@@ -180,8 +142,8 @@ async def delete(object_id: str):
     ret_mongo=""
     ret_mongo_err=""
     try:
-        task_query = {"immunespace_download_id": immunespace_download_id}
-        ret = mongo_db_immunespace_downloads_column.delete_one(task_query)
+        task_query = {"object_id": object_id}
+        ret = mongo_uploads.delete_one(task_query)
         #<class 'pymongo.results.DeleteResult'>
         delete_status = "deleted"
         if ret.acknowledged != True:
@@ -206,7 +168,7 @@ async def delete(object_id: str):
     ret_os_err=""
     try:
         local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-        local_path = os.path.join(local_path, immunespace_download_id + f"-immunespace-data")
+        local_path = os.path.join(local_path, object_id + f"-upload-data")
         
         shutil.rmtree(local_path,ignore_errors=False)
     except Exception as e:

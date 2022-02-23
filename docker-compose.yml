@@ -9,6 +9,17 @@ services:
     volumes:
         - /var/run/docker.sock:/var/run/docker.sock
         - ./config/service_info.json:/app/service_info.json
+        - ./data:/app/data
     expose:
       - ${API_PORT}
 
+  tx-persistence:
+    container_name: tx-persistence
+    image: txscience/tx-persistence
+    restart: always
+    env_file:
+      - .env
+    expose:
+      - 27017
+      - 27018
+      - 27019
