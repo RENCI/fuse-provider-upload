@@ -74,6 +74,13 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
     '''
     try:
         object_id = "upload_" + submitter_id + "_" + str(uuid.uuid4())
+        if requested_object_id != None:
+            entry = mongo_uploads.find({"object_id": requested_object_id},
+                                       {"_id": 0, "object_id": 1})
+            logger.info(msg=f"[upload]found ("+str(entry.count())+") matches for requested object_id="+str(object_id))
+            if entry.count() == 0:
+                object_id = requested_object_id
+
         logger.info(msg=f"[upload]object_id="+str(object_id))
         row_id = mongo_uploads.insert_one(
             {"object_id": object_id, "submitter_id": submitter_id, "status": None, "stderr": None, "date_created": datetime.datetime.utcnow(), "start_date": None, "end_date": None}
@@ -98,13 +105,13 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
                             detail="! Exception {0} occurred while running upload for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
 
 # xxx check param defaults
-@app.get("/objects/search/{submitter_id}", summary="Get infos for all the DrsObject for this submitter_id.")
+@app.get("/search/{submitter_id}", summary="Get infos for all the DrsObject for this submitter_id.")
 async def objects_search(submitter_id: str = Path(default="", description="submitter_id of user that uploaded the archive")):
     try:
-        logger.info(msg=f"[objects_search] submitter_id:" + str(submitter_id))
+        logger.info(msg=f"[search] submitter_id:" + str(submitter_id))
         ret = list(map(lambda a: a, mongo_uploads.find({"submitter_id": submitter_id},
                                                        {"_id": 0, "object_id": 1})))
-        logger.info(msg=f"[objects_search] ret:" + str(ret))
+        logger.info(msg=f"[search] ret:" + str(ret))
         return ret
     except Exception as e:
         raise HTTPException(status_code=404,
@@ -128,68 +135,53 @@ async def delete(object_id: str):
     - status = 'failed' if 0 or greater than 1 object is not found in database.
     '''
     delete_status = "done"
-
-    # Delete may be requested while the download job is enqueued, so check that first:
-    ret_job=""
-    ret_job_err=""
-    try:
-        job = Job.fetch(object_id, connection=redis_connection)
-        if job == None:
-            ret_job="No job found in queue. \n"
-        else:
-            job = job.delete(remove_from_queue=True)
-    except Exception as e:
-        # job is not expected to be on queue so don't change deleted_status from "done"
-        ret_job_err += "! Exception {0} occurred while deleting job from queue: message=[{1}] \n! traceback=\n{2}\n".format(type(e), e, traceback.format_exc())
-                        
-        delete_status = "exception"
-
-    # Assuming the job already executed, remove any database records
     ret_mongo=""
     ret_mongo_err=""
     try:
-        task_query = {"object_id": object_id}
-        ret = mongo_uploads.delete_one(task_query)
+        logger.warn(msg=f"[delete] Deleting object_id:" + str(object_id))
+        ret = mongo_uploads.delete_one({"object_id": object_id})
         #<class 'pymongo.results.DeleteResult'>
         delete_status = "deleted"
         if ret.acknowledged != True:
             delete_status = "failed"
             ret_mongo += "ret.acknoledged not True.\n"
+            logger.error(msg=f"[delete] delete failed, ret.acknowledged ! = True")
         if ret.deleted_count != 1:
             # should never happen if index was created for this field
             delete_status = "failed"
             ret_mongo += "Wrong number of records deleted ("+str(ret.deleted_count)+")./n"
+            logger.error(msg=f"[delete] delete failed, wrong number deleted, count[1]="+str(ret.deleted_count))
         ## xxx
         # could check if there are any remaining; but this should instead be enforced by creating an index for this columnxs
         # could check ret.raw_result['n'] and ['ok'], but 'ok' seems to always be 1.0, and 'n' is the same as deleted_count
         ##
         ret_mongo += "Deleted count=("+str(ret.deleted_count)+"), Acknowledged=("+str(ret.acknowledged)+")./n"
     except Exception as e:
-        ret_mongo_err += "! Exception {0} occurred while deleting job from database, message=[{1}] \n! traceback=\n{2}\n".format(type(e), e, traceback.format_exc())
-
+        logger.error(msg=f"[delete] Exception {0} occurred while deleting {1} from database\n".format(type(e), object_id))
+        ret_mongo_err += "! Exception {0} occurred while deleting {1} from database, message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc())
         delete_status = "exception"
         
     # Data are cached on a mounted filesystem, unlink that too if it's there
+    logger.info(msg=f"[delete] Deleting "+str(object_id)+" from file system\n")
     ret_os=""
     ret_os_err=""
     try:
         local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-        local_path = os.path.join(local_path, object_id + f"-upload-data")
-        
+        local_path = os.path.join(local_path, object_id + f"-data")
+        logger.info(msg=f"[delete] removing tree ("+str(local_path)+")\n")
         shutil.rmtree(local_path,ignore_errors=False)
     except Exception as e:
+        logger.error(msg=f"[delete] Exception "+str(type(e))+" occurred while deleting "+str(object_id)+" from filesystem\n")
         ret_os_err += "! Exception {0} occurred while deleting job from filesystem, message=[{1}] \n! traceback=\n{2}\n".format(type(e), e, traceback.format_exc())
-
         delete_status = "exception"
 
-    ret_message = ret_job + ret_mongo + ret_os
-    ret_err_message = ret_job_err + ret_mongo_err + ret_os_err
-    return {
+    ret = {
         "status": delete_status,
-        "info": ret_message,
-        "stderr": ret_err_message,
+        "info": ret_mongo + ret_os,
+        "stderr": ret_mongo_err + ret_os_err
     }
-
+    logger.info(msg=f"[delete] returning ("+str(ret)+")\n")
+    return ret
 
 
 # ----------------- GA4GH endpoints ---------------------
