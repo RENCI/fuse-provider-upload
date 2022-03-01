@@ -1,5 +1,5 @@
 #
-#   prove -v t/DRS.t [ :: [--verbose] [--dry_run] ]
+#   prove -v t/write.t [ :: [--verbose] [--dry_run] ]
 #
 # Assumes containers are built and running (use up.sh)
 #
