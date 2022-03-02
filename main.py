@@ -58,6 +58,11 @@ app.add_middleware(
 import pathlib
 import json
 
+
+def _file_path(object_id):
+    local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    return os.path.join(local_path, f"{object_id}-data")
+
 # API is described in:
 # http://localhost:8083/openapi.json
 # Therefore:
@@ -70,7 +75,8 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
                  requested_object_id: str = Query(default=None, description="optional argument to be used by submitter to request an object_id; this could be, for example, used to retrieve objects from a 3rd party for which this endpoint is a proxy. The requested object_id is not guaranteed, enduser should check return value for final object_id used."),
                  client_file: UploadFile = File(...)):
     '''
-    Parameters such as username/email for the submitter and parameter formats will be returned by the service-info endpoint to allow dynamic construction of dashboard elements
+    Parameters such as username/email for the submitter and parameter formats will be returned by the service-info endpoint to allow dynamic construction of dashboard elements.
+    File status will be set in the persistent database as 'started' when the upload begins, 'failed' if an exception is thrown', and 'finished' when complete, in accordance with redis job.status() codes.
     '''
     try:
         object_id = "upload_" + submitter_id + "_" + str(uuid.uuid4())
@@ -82,28 +88,37 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
                 object_id = requested_object_id
 
         logger.info(msg=f"[upload]object_id="+str(object_id))
-        logger.info(msg=f"[upload]local file_name="+str(client_file.filename))
+        logger.info(msg=f"[upload]client file_name="+str(client_file.filename))
         row_id = mongo_uploads.insert_one(
-            {"object_id": object_id, "submitter_id": submitter_id, "file_name": client_file.filename, "status": None, "stderr": None, "date_created": datetime.datetime.utcnow(), "start_date": None, "end_date": None}
+            {"object_id": object_id, "submitter_id": submitter_id, "file_name": client_file.filename, "status": "started", "stderr": None, "date_created": datetime.datetime.utcnow(), "start_date": None, "end_date": None}
         ).inserted_id
         logger.info(msg=f"[upload] new row_id = " + str(row_id))
 
-        local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-        local_path = os.path.join(local_path, f"{object_id}-data")
+        local_path = _file_path(object_id)
         os.mkdir(local_path)
         logger.info(msg=f"[upload] localpath = "+str(local_path))
         file_path = os.path.join(local_path, client_file.filename)
-        logger.info(msg=f"[upload] filepath = "+str(file_path))
-        
+        #logger.info(msg=f"[upload] filepath = "+str(file_path))
         async with aiofiles.open(file_path, 'wb') as out_file:
             contents = await client_file.read()
             await out_file.write(contents)
         mongo_uploads.update_one({"object_id": object_id},
-                                 {"$set": {"start_date": datetime.datetime.utcnow(), "status": "completed"}})
+                                 {"$set": {"start_date": datetime.datetime.utcnow(), "status": "finished"}})
+        # maybe check here if the file is an archive, and if so, set the list of files attribute
         ret_val = {"object_id": object_id}
         logger.info(msg=f"[upload] returning: " + str(ret_val))
         return ret_val
+    
     except Exception as e:
+        # assume the upload failed and update the status accordingly;
+        # but take care that the update doesn't throw an exception that might force the 404 to not get raised.
+        try:
+            mongo_uploads.update_one({"object_id": object_id},
+                                     {"$set": {"start_date": datetime.datetime.utcnow(), "status": "failed"}})
+            logger.info(msg=f"[upload] exception, setting upload status to failed for "+object_id)
+        except:
+            pass
+        
         raise HTTPException(status_code=404,
                             detail="! Exception {0} occurred while running upload for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
 
@@ -116,9 +131,10 @@ async def objects_search(submitter_id: str = Path(default="", description="submi
                                                        {"_id": 0, "object_id": 1})))
         logger.info(msg=f"[search] ret:" + str(ret))
         return ret
+    
     except Exception as e:
         raise HTTPException(status_code=404,
-                            detail="! Exception {0} occurred while searching for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), e, traceback.format_exc(), object_id))
+                            detail="! Exception {0} occurred while searching for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
                        
 
 @app.delete("/delete/{object_id}", summary="DANGER ZONE: Delete a downloaded object; this action is rarely justified.")
@@ -185,6 +201,30 @@ async def delete(object_id: str):
     }
     logger.info(msg=f"[delete] returning ("+str(ret)+")\n")
     return ret
+
+@app.get("/files/{object_id}")
+def get_file(object_id: str):
+    try: 
+        file_path = _file_path(object_id)
+        logger.info(msg=f"[get_file] Retrieving "+str(object_id)+" at "+file_path+"\n")
+
+        # xxx maybe remove this?
+        if not os.path.isdir(file_path): # xxx or len(os.listdir(dir_path)) < 5:
+            raise HTTPException(status_code=404, detail="Not found")
+    
+        def iterfile():
+            for file in os.listdir(file_path):
+                with open(os.path.join(file_path, file), mode="rb") as file_data:
+                    yield from file_data
+            
+        # xxx work on this
+        response = StreamingResponse(iterfile(), media_type="text/csv")
+        response.headers["Content-Disposition"] = "attachment; filename=export.csv" 
+        return response
+    
+    except Exception as e:
+        raise HTTPException(status_code=404,
+                            detail="! Exception {0} occurred while retrieving for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
 
 
 # ----------------- GA4GH endpoints ---------------------
