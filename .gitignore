@@ -1,5 +1,8 @@
 trash
 
+# ignore database and files
+data/
+
 #Test outputs
 t/out/
 
