@@ -52,7 +52,7 @@ my $fn ;
 cleanup_out();
 
 $fn = "write-1.json";
-files_eq(f($fn), cmd("POST", $fn, "submit?submitter_id=${SUBMITTER_ID}&requested_object_id=${OBJID}","-F 'archive=@./t/input/test_upload.tz;type=application/x-zip-compressed' -H 'Content-Type: multipart/form-data'"),
+files_eq(f($fn), cmd("POST", $fn, "submit?submitter_id=${SUBMITTER_ID}&requested_object_id=${OBJID}","-F 'client_file=@./t/input/test_upload.tz;type=application/x-zip-compressed' -H 'Content-Type: multipart/form-data'"),
 	                                                                                                   "Submit an object");
 $fn = "write-2.json";
 files_eq(f($fn), cmd("GET",$fn, "search/{$SUBMITTER_ID}"),                                                 "Get list of objects submitted by $SUBMITTER_ID");

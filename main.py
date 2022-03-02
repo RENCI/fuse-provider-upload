@@ -68,7 +68,7 @@ import json
 @app.post("/submit", description="Submit a digital object to be stored by this data provider")
 async def upload(submitter_id: str = Query(default=None, description="unique identifier for the submitter (e.g., email)"),
                  requested_object_id: str = Query(default=None, description="optional argument to be used by submitter to request an object_id; this could be, for example, used to retrieve objects from a 3rd party for which this endpoint is a proxy. The requested object_id is not guaranteed, enduser should check return value for final object_id used."),
-                 archive: UploadFile = File(...)):
+                 client_file: UploadFile = File(...)):
     '''
     Parameters such as username/email for the submitter and parameter formats will be returned by the service-info endpoint to allow dynamic construction of dashboard elements
     '''
@@ -82,19 +82,22 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
                 object_id = requested_object_id
 
         logger.info(msg=f"[upload]object_id="+str(object_id))
+        logger.info(msg=f"[upload]local file_name="+str(client_file.filename))
         row_id = mongo_uploads.insert_one(
-            {"object_id": object_id, "submitter_id": submitter_id, "status": None, "stderr": None, "date_created": datetime.datetime.utcnow(), "start_date": None, "end_date": None}
+            {"object_id": object_id, "submitter_id": submitter_id, "file_name": client_file.filename, "status": None, "stderr": None, "date_created": datetime.datetime.utcnow(), "start_date": None, "end_date": None}
         ).inserted_id
         logger.info(msg=f"[upload] new row_id = " + str(row_id))
+
         local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
         local_path = os.path.join(local_path, f"{object_id}-data")
         os.mkdir(local_path)
         logger.info(msg=f"[upload] localpath = "+str(local_path))
-        file_path = os.path.join(local_path, "upload.gz")
+        file_path = os.path.join(local_path, client_file.filename)
         logger.info(msg=f"[upload] filepath = "+str(file_path))
+        
         async with aiofiles.open(file_path, 'wb') as out_file:
-            content = await archive.read()
-            await out_file.write(content)
+            contents = await client_file.read()
+            await out_file.write(contents)
         mongo_uploads.update_one({"object_id": object_id},
                                  {"$set": {"start_date": datetime.datetime.utcnow(), "status": "completed"}})
         ret_val = {"object_id": object_id}
@@ -215,7 +218,7 @@ async def service_info():
     with open(service_info_path) as f:
         return json.load(f)
 
-    
+
 # READ-ONLY endpoints follow the GA4GH DRS API, modeled below
 # https://editor.swagger.io/?url=https://ga4gh.github.io/data-repository-service-schemas/preview/release/drs-1.2.0/openapi.yaml
     
