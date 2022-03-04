@@ -1,9 +1,10 @@
+
 import datetime
 import os
 import shutil
 import uuid
 from multiprocessing import Process
-from typing import List
+from typing import List, Optional
 
 import aiofiles
 import docker
@@ -20,7 +21,7 @@ from bson.json_util import dumps, loads
 
 import traceback
 
-from fuse.models.Objects import Passports, ProviderExampleObject
+from fuse.models.Objects import Passports, ProviderExampleObject, Checksums
 from logging.config import dictConfig
 import logging
 from fuse.models.Config import LogConfig
@@ -63,6 +64,22 @@ def _file_path(object_id):
     local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
     return os.path.join(local_path, f"{object_id}-data")
 
+from enum import Enum
+class DataType(str, Enum):
+    geneExpression='dataset-geneExpression'
+    # xxx to add more datatypes: expand this
+
+def _valid_contents(data_type, contents_list):
+    if data_type == DataType.geneExpression:
+        for file in contents_list:
+            if file["name"] not in ["geneBySampleMatrix.csv", "phenoDataMatrix.csv"]:
+                raise Exception("[_valid_contents] Unknown file "+str(file)+" for data-type: "+str(data_type))
+    # xxx to add more datatypes: expand this
+    else:
+        raise Exception("[_valid_contents] Unknown data-type: "+str(data_type))
+    return True
+            
+    
 # API is described in:
 # http://localhost:8083/openapi.json
 # Therefore:
@@ -72,11 +89,18 @@ def _file_path(object_id):
 # curl -X 'GET'    'http://localhost:8083/openapi.json' -H 'accept: application/json' 2> /dev/null |python -m json.tool |jq '.paths."/submit".post.parameters[].name' 
 @app.post("/submit", description="Submit a digital object to be stored by this data provider")
 async def upload(submitter_id: str = Query(default=None, description="unique identifier for the submitter (e.g., email)"),
+                 data_type: Optional[DataType] = Query(default="gene-expression-dataset", description="the type of data; options are: dataset-geneExpression, results-pca, results-cellularFunction. Only gene-expression-dataset is supported by this provider"),
+                 description: Optional[str] = Query(default=None, description="optional description of this object"),
+                 version: Optional[str] = Query(default="1.0", description="version of this object; objects should never be deleted unless data are redacted"),
+                 aliases: Optional[str] = Query(default=None, description="optional list of aliases for this object"),
+                 checksums: Optional[List] = Query(default=None, description="optional checksums for the object, enabling verification checking by clients; this is a json list of objects, each object contains 'checksum' and 'type' fields, where 'type' might be 'sha-256' for example."),
                  requested_object_id: str = Query(default=None, description="optional argument to be used by submitter to request an object_id; this could be, for example, used to retrieve objects from a 3rd party for which this endpoint is a proxy. The requested object_id is not guaranteed, enduser should check return value for final object_id used."),
                  client_file: UploadFile = File(...)):
     '''
-    Parameters such as username/email for the submitter and parameter formats will be returned by the service-info endpoint to allow dynamic construction of dashboard elements.
-    File status will be set in the persistent database as 'started' when the upload begins, 'failed' if an exception is thrown', and 'finished' when complete, in accordance with redis job.status() codes.
+    Please notes:
+    - mime-type: All submitted files must be of mime-type "application/zip"
+    - A data_type: of 'gene-expression-dataset' must be a zip containing files named geneBySampleMatrix.csv and phenoDataMatrix.csv. The former has entrez-gene ids on the columns and samples on the rows. There is no header. The latter has a header with arbitrary phenotype names on the columns and sample names on the rows. Row1 of phenoDataMatrix.csv corresponds to Column2 of geneBySampleMatrix.csv and so forth.
+    - File status: will be set in the persistent database as 'started' when the upload begins, 'failed' if an exception is thrown', and 'finished' when complete, in accordance with redis job.status() codes.
     '''
     try:
         object_id = "upload_" + submitter_id + "_" + str(uuid.uuid4())
@@ -89,9 +113,34 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
 
         logger.info(msg=f"[upload]object_id="+str(object_id))
         logger.info(msg=f"[upload]client file_name="+str(client_file.filename))
-        row_id = mongo_uploads.insert_one(
-            {"object_id": object_id, "submitter_id": submitter_id, "file_name": client_file.filename, "status": "started", "stderr": None, "date_created": datetime.datetime.utcnow(), "start_date": None, "end_date": None}
-        ).inserted_id
+
+        #import socket
+        #host_name = "http://"+str(socket.gethostname())+":"+os.environ["API_PORT"]
+        host_name = f"http://{os.getenv('HOSTNAME')}:{os.getenv('API_PORT')}"
+        logger.info(msg=f"[upload]host_name="+str(host_name))
+
+        meta_data = {"object_id": object_id,
+                     "id": object_id,
+                     "name": client_file.filename,
+                     "description": description,
+                     "self_uri": host_name+"/files/"+object_id,
+                     "size": None,
+                     "created_time": datetime.datetime.utcnow(),
+                     "updated_time": None,
+                     "version": version,
+                     "mime_type": None,
+                     "aliases": aliases,
+                     "checksums": checksums,
+                     "access_methods": None,
+                     "contents": None,
+                     "data_type": data_type,
+                     "submitter_id": submitter_id,
+                     "file_type": data_type,
+                     "status": "started",
+                     "stderr": None
+                     }
+        logger.info(msg=f"[upload] new object metatdata = " + str(meta_data))
+        row_id = mongo_uploads.insert_one(meta_data).inserted_id
         logger.info(msg=f"[upload] new row_id = " + str(row_id))
 
         local_path = _file_path(object_id)
@@ -102,8 +151,44 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
         async with aiofiles.open(file_path, 'wb') as out_file:
             contents = await client_file.read()
             await out_file.write(contents)
+        
+        # For MIME types
+        import magic
+        mime = magic.Magic(mime=True)
+        mime_type = mime.from_file(file_path)
+        if mime_type != 'application/zip':
+            raise Exception("Wrong file type: "+str(mime_type))
+        
+        contents_list = []
+        import zipfile
+        zip = zipfile.ZipFile(file_path)    
+        logger.info(msg=f"[upload] reading zip = "+str(file_path))
+        for subfile_path in zip.namelist():
+            logger.info(msg=f"[upload]   subfile_path = "+str(subfile_path))
+            [path_head, subfile_name] = os.path.split(subfile_path)
+            logger.info(msg=f"[upload]   subfile_name = "+str(subfile_name))
+            file_obj = {}
+            file_obj["id"] = subfile_name
+            file_obj["name"] = subfile_name
+            file_obj["drs_uri"] = host_name+"/files/"+object_id+"/"+subfile_name
+            file_obj["contents"] = None
+            # full_path is format: archive_name/file_name
+            file_obj["full_path"] = subfile_path
+            # use full_path to extract from archive; e.g.:
+            #   with zip.open(full_path) as f:
+            #     f.read()
+            contents_list.append(file_obj)
+
+        assert _valid_contents(data_type, contents_list)
+
         mongo_uploads.update_one({"object_id": object_id},
-                                 {"$set": {"start_date": datetime.datetime.utcnow(), "status": "finished"}})
+                                 {"$set": {
+                                     "size": os.path.getsize(file_path),
+                                     "updated_time": datetime.datetime.utcnow(),
+                                     "mime_type": mime_type,
+                                     "contents": contents_list,
+                                     "status": "finished"
+                                 }})
         # maybe check here if the file is an archive, and if so, set the list of files attribute
         ret_val = {"object_id": object_id}
         logger.info(msg=f"[upload] returning: " + str(ret_val))
@@ -123,6 +208,7 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
                             detail="! Exception {0} occurred while running upload for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
 
 # xxx check param defaults
+# xxx add parameters for finding object_id's of specific data_types (e.g., result-pca or dataset-geneExpression (DataType.geneExpression), etc.
 @app.get("/search/{submitter_id}", summary="Get infos for all the DrsObject for this submitter_id.")
 async def objects_search(submitter_id: str = Path(default="", description="submitter_id of user that uploaded the archive")):
     try:
@@ -202,30 +288,36 @@ async def delete(object_id: str):
     logger.info(msg=f"[delete] returning ("+str(ret)+")\n")
     return ret
 
+# xxx add parameters for retrieving files within the archive
 @app.get("/files/{object_id}")
 def get_file(object_id: str):
-    try: 
+    try:
         file_path = _file_path(object_id)
         logger.info(msg=f"[get_file] Retrieving "+str(object_id)+" at "+file_path+"\n")
 
-        # xxx maybe remove this?
-        if not os.path.isdir(file_path): # xxx or len(os.listdir(dir_path)) < 5:
-            raise HTTPException(status_code=404, detail="Not found")
-    
-        def iterfile():
+        assert os.path.isdir(file_path)
+        assert len(os.listdir(file_path)) >= 1
+        
+        def iterfile(file_path):
             for file in os.listdir(file_path):
                 with open(os.path.join(file_path, file), mode="rb") as file_data:
                     yield from file_data
-            
-        # xxx work on this
-        response = StreamingResponse(iterfile(), media_type="text/csv")
-        response.headers["Content-Disposition"] = "attachment; filename=export.csv" 
+
+        entry = mongo_uploads.find({"object_id": object_id}, {"mime_type":1, "name":1})
+        assert entry.count() == 1
+        logger.info(msg=f"[get_file] total entries found = "+str(entry.count()))
+        file_name= entry[0]["name"]
+        logger.info(msg=f"[get_file] filename = "+str(file_name))
+        media_type = entry[0]["mime_type"]
+        logger.info(msg=f"[get_file] media_type = "+str(media_type))
+
+        response = StreamingResponse(iterfile(file_path), media_type=media_type)
+        response.headers["Content-Disposition"] = "attachment; filename="+file_name
         return response
-    
     except Exception as e:
         raise HTTPException(status_code=404,
                             detail="! Exception {0} occurred while retrieving for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
-
+             
 
 # ----------------- GA4GH endpoints ---------------------
 @app.get("/service-info", summary="Retrieve information about this service")
@@ -268,8 +360,21 @@ async def objects(object_id: str = Path(default="", description="DrsObject ident
     '''
     Returns object metadata, and a list of access methods that can be used to fetch object bytes.
     '''
-    example_object = ProviderExampleObject()
-    return example_object.dict()
+    try:
+        entry = mongo_uploads.find({"object_id": object_id})
+        logger.info(msg=f"[objects] total found for ["+object_id+"]="+str(entry.count())+"\n")
+        assert entry.count() == 1
+        logger.info(msg=f"[objects] found Object["+object_id+"]="+str(entry[0])+"\n")
+        obj = entry[0]
+        del obj['_id']
+        # xxx how does this get validated?
+        return obj
+
+        #example_object = ProviderExampleObject()
+        #return example_object.dict()
+    except Exception as e:
+        raise HTTPException(status_code=404,
+                            detail="! Exception {0} occurred while searching for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
 
 # xxx add value for passport example that doesn't cause server error
 # xxx figure out how to add the following description to 'passports':

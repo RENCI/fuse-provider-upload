@@ -31,7 +31,7 @@ sub cmd {
     my $cmd;
     switch($type) {
     	case "DELETE" { $cmd=sprintf("curl -X 'DELETE'  '${HOST_PATH}/%s' -H 'accept: application/json'", $endpoint); }
-	case "GET"    { $cmd=sprintf("curl -X 'GET'     '${HOST_PATH}/%s' -H 'accept: application/json'", $endpoint); }
+	case "GET"    { $cmd=sprintf("curl -X 'GET' %s '${HOST_PATH}/%s' -H 'accept: application/json'", $post_args, $endpoint ); }
 	case "POST"  { $cmd=sprintf("curl -X 'POST' %s '${HOST_PATH}/%s' -H 'accept: application/json'", $post_args, $endpoint);}
 	else { print("+! [cmd] ERROR ${type} not recognized.\n");	}
     }

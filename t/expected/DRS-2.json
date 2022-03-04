@@ -1,41 +1,36 @@
 {
-  "access_methods": [
-    {
-      "access_id": "string",
-      "access_url": {
-        "headers": "Authorization: Basic Z2E0Z2g6ZHJz",
-        "url": "string"
-      },
-      "region": "us-east-1",
-      "type": "s3"
-    }
-  ],
-  "aliases": [
-    "string"
-  ],
-  "checksums": [
-    {
-      "checksum": "string",
-      "type": "sha-256"
-    }
-  ],
+  "access_methods": null,
+  "aliases": null,
+  "checksums": null,
   "contents": [
     {
-      "contents": [
-        "string"
-      ],
-      "drs_uri": "drs://drs.example.org/314159",
-      "id": "string",
-      "name": "string"
+      "contents": null,
+      "drs_uri": "http://localhost:8083/files/test_object_id/geneBySampleMatrix.csv",
+      "full_path": "for-testing/geneBySampleMatrix.csv",
+      "id": "geneBySampleMatrix.csv",
+      "name": "geneBySampleMatrix.csv"
+    },
+    {
+      "contents": null,
+      "drs_uri": "http://localhost:8083/files/test_object_id/phenoDataMatrix.csv",
+      "full_path": "for-testing/phenoDataMatrix.csv",
+      "id": "phenoDataMatrix.csv",
+      "name": "phenoDataMatrix.csv"
     }
   ],
   "created_time": "xxx",
-  "description": "string",
-  "id": "string",
-  "mime_type": "application/json",
-  "name": "string",
-  "self_uri": "drs://drs.example.org/314159",
-  "size": 0,
+  "data_type": "dataset-geneExpression",
+  "description": null,
+  "file_type": "dataset-geneExpression",
+  "id": "test_object_id",
+  "mime_type": "application/zip",
+  "name": "for-testing.zip",
+  "object_id": "test_object_id",
+  "self_uri": "http://localhost:8083/files/test_object_id",
+  "size": 337622,
+  "status": "finished",
+  "stderr": null,
+  "submitter_id": "test@email.com",
   "updated_time": "xxx",
-  "version": "string"
+  "version": "1.0"
 }
