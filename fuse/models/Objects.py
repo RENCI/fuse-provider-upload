@@ -66,7 +66,7 @@ class AccessMethods(BaseModel):
 class Contents(BaseModel):
     name: str="string"
     id: str="string"
-    drs_uri: str="drs://drs.example.org/314159"
+    drs_uri: str="http://{g_host_name}:{g_host_port}/{g_container_name:{g_container_port}/files/example.zip"
     contents: List[str] = [
         "string"
     ]

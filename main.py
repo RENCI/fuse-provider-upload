@@ -40,10 +40,15 @@ mongo_uploads=mongo_db.uploads
 
 app = FastAPI()
 
+g_host_name=os.getenv('HOST_NAME')
+g_host_port=os.getenv('HOST_PORT')
+g_container_network = os.getenv('CONTAINER_NETWORK')
+g_container_name=os.getenv('CONTAINER_NAME')
+g_container_port=os.getenv('CONTAINER_PORT')
 origins = [
-    f"http://{os.getenv('HOSTNAME')}:{os.getenv('HOSTPORT')}",
-    f"http://{os.getenv('HOSTNAME')}",
-    "http://localhost:{os.getenv('HOSTPORT')}",
+    f"http://{g_host_name}:{g_host_port}",
+    f"http://{g_host_name}",
+    f"http://localhost:{g_host_port}",
     "http://localhost",
     "*",
 ]
@@ -114,16 +119,14 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
         logger.info(msg=f"[upload]object_id="+str(object_id))
         logger.info(msg=f"[upload]client file_name="+str(client_file.filename))
 
-        #import socket
-        #host_name = "http://"+str(socket.gethostname())+":"+os.environ["API_PORT"]
-        host_name = f"http://{os.getenv('HOSTNAME')}:{os.getenv('API_PORT')}"
-        logger.info(msg=f"[upload]host_name="+str(host_name))
+        drs_uri = f"drs:///{g_host_name}:{g_host_port}/{g_container_network}/{g_container_name}:{g_container_port}/{object_id}",
+        logger.info(msg=f"[upload]drs_uri={drs_uri}")
 
         meta_data = {"object_id": object_id,
                      "id": object_id,
                      "name": client_file.filename,
                      "description": description,
-                     "self_uri": host_name+"/files/"+object_id,
+                     "self_uri": drs_uri,
                      "size": None,
                      "created_time": datetime.datetime.utcnow(),
                      "updated_time": None,
@@ -167,10 +170,12 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
             logger.info(msg=f"[upload]   subfile_path = "+str(subfile_path))
             [path_head, subfile_name] = os.path.split(subfile_path)
             logger.info(msg=f"[upload]   subfile_name = "+str(subfile_name))
+            subfile_drs_uri = f"{drs_uri}/{subfile_name}"
+            logger.info(msg=f"[upload]   subfile_drs_uri={subfile_drs_uri}")
             file_obj = {}
             file_obj["id"] = subfile_name
-            file_obj["name"] = subfile_name
-            file_obj["drs_uri"] = host_name+"/files/"+object_id+"/"+subfile_name
+            file_obj["name"] = subfile_name         
+            file_obj["drs_uri"] = subfile_drs_uri
             file_obj["contents"] = None
             # full_path is format: archive_name/file_name
             file_obj["full_path"] = subfile_path
@@ -288,7 +293,7 @@ async def delete(object_id: str):
     logger.info(msg=f"[delete] returning ("+str(ret)+")\n")
     return ret
 
-# xxx add parameters for retrieving files within the archive
+# xxx parse {object_id} for '/' - if found, retrieve a specific file from within the archive
 @app.get("/files/{object_id}")
 def get_file(object_id: str):
     try:

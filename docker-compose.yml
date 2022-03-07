@@ -1,17 +1,18 @@
 version: '3.8'
+
 services:
   fuse-provider-upload:
-    container_name: fuse-provider-upload
+    container_name: ${CONTAINER_NAME}
     build: .
     env_file: .env
     ports:
-        - ${API_PORT}:8000
+      - ${HOST_PORT}:${CONTAINER_PORT}
     volumes:
         - /var/run/docker.sock:/var/run/docker.sock
         - ./config/service_info.json:/app/service_info.json
         - ./data:/app/data
-    expose:
-      - ${API_PORT}
+    networks:
+      - upload_network
 
   upload-tx-persistence:
     container_name: upload-tx-persistence
@@ -25,3 +26,10 @@ services:
       - 27017
       - 27018
       - 27019
+    networks:
+      - upload_network
+
+networks:
+  upload_network:
+    name: ${CONTAINER_NETWORK}
+    external: true
