@@ -106,10 +106,10 @@ def _valid_contents(data_type, contents_list):
     if data_type == DataType.geneExpression:
         for file in contents_list:
             if file["name"] not in ["geneBySampleMatrix.csv", "phenoDataMatrix.csv"]:
-                raise Exception("[_valid_contents] Unknown file "+str(file)+" for data-type: "+str(data_type))
+                raise Exception(f"[_valid_contents] Unknown file {file} for data-type: {data_type}")
     # xxx to add more datatypes: expand this
     else:
-        raise Exception("[_valid_contents] Unknown data-type: "+str(data_type))
+        raise Exception(f"[_valid_contents] Unknown data-type: {data_type}")
     return True
             
     
@@ -136,7 +136,7 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
     - File status: will be set in the persistent database as 'started' when the upload begins, 'failed' if an exception is thrown', and 'finished' when complete, in accordance with redis job.status() codes.
     '''
     try:
-        object_id = "upload_" + submitter_id + "_" + str(uuid.uuid4())
+        object_id = f"upload_{submitter_id}_{uuid.uuid4()}"
         if requested_object_id != None:
             entry = mongo_uploads.find({"object_id": requested_object_id},
                                        {"_id": 0, "object_id": 1})
@@ -179,7 +179,6 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
         os.mkdir(local_path)
         logger.info(msg=f"[upload] localpath = {local_path}")
         file_path = os.path.join(local_path, client_file.filename)
-        #logger.info(msg=f"[upload] filepath = "+str(file_path))
         async with aiofiles.open(file_path, 'wb') as out_file:
             contents = await client_file.read()
             await out_file.write(contents)
@@ -297,7 +296,7 @@ async def delete(object_id: str):
         # could check if there are any remaining; but this should instead be enforced by creating an index for this columnxs
         # could check ret.raw_result['n'] and ['ok'], but 'ok' seems to always be 1.0, and 'n' is the same as deleted_count
         ##
-        ret_mongo += "Deleted count=("+str(ret.deleted_count)+"), Acknowledged=("+str(ret.acknowledged)+")./n"
+        ret_mongo += f"Deleted count=({ret.deleted_count}), Acknowledged=({ret.acknowledged})."
     except Exception as e:
         logger.error(msg=f"[delete] Exception {type(e)} occurred while deleting {object_id} from database")
         ret_mongo_err += f"! Exception {type(e)} occurred while deleting {object_id} from database, message=[{e}] \n! traceback=\n{traceback.format_exc()}"
@@ -313,7 +312,7 @@ async def delete(object_id: str):
         logger.info(msg=f"[delete] removing tree ({local_path})")
         shutil.rmtree(local_path,ignore_errors=False)
     except Exception as e:
-        logger.error(msg=f"[delete] Exception {type(e} occurred while deleting {object_id} from filesystem")
+        logger.error(msg=f"[delete] Exception {type(e)} occurred while deleting {object_id} from filesystem")
         ret_os_err += f"! Exception {type(e)} occurred while deleting job from filesystem, message=[{e}] \n! traceback=\n{traceback.format_exc()}"
         delete_status = "exception"
 
