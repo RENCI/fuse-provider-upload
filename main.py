@@ -140,8 +140,9 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
         if requested_object_id != None:
             entry = mongo_uploads.find({"object_id": requested_object_id},
                                        {"_id": 0, "object_id": 1})
-            logger.info(msg=f"[upload]found ("+str(entry.count())+") matches for requested object_id="+str(object_id))
-            if entry.count() == 0:
+            num_matches = _mongo_count("upload",mongo_uploads,{"object_id": requested_object_id},{})
+            logger.info(msg=f"[upload]found ({num_matches}) matches for requested object_id="+str(object_id))
+            if num_matches == 0:
                 object_id = requested_object_id
 
         logger.info(msg=f"[upload]object_id="+str(object_id))
