@@ -188,9 +188,8 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
         import magic
         mime = magic.Magic(mime=True)
         mime_type = mime.from_file(file_path)
-        if mime_type != 'application/zip' and mime_type != 'application/csv':
-            raise Exception(f"Wrong file type: {mime_type}")
         logger.info(msg=f"[upload] file type = {mime_type}")
+        assert(mime_type == 'application/zip' or mime_type == 'application/csv' or mime_type == 'text/csv')
         
         contents_list = []
         if mime_type == 'application/zip':
@@ -231,16 +230,11 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
         return ret_val
     
     except Exception as e:
-        detail_str=f"! Exception {type(e)} occurred while running upload for ({object_id}), message=[{e}] \n! traceback=\n{traceback.format_exc()}"
-        # assume the upload failed and update the status accordingly;
-        # but take care that the update doesn't throw an exception that might force the 404 to not get raised.
-        try:
-            mongo_uploads.update_one({"object_id": object_id},
-                                     {"$set": {"start_date": datetime.datetime.utcnow(), "status": "failed"}})
-            logger.info(msg=f"[upload] exception, setting upload status to failed for {object_id}")
-        except:
-            pass
-        raise HTTPException(status_code=404, detail=detail_str)
+        # assume the upload failed and update the status accordingly
+        mongo_uploads.update_one({"object_id": object_id},
+                                 {"$set": {"start_date": datetime.datetime.utcnow(), "status": "failed"}})
+        logger.info(msg=f"[upload] exception, setting upload status to failed for {object_id}")
+        raise HTTPException(status_code=404, detail=f"! Exception {type(e)} occurred while running upload for ({object_id}), message=[{e}] \n! traceback=\n{traceback.format_exc()}")
 
 # xxx check param defaults
 # xxx add parameters for finding object_id's of specific data_types (e.g., result-pca or dataset-geneExpression (DataType.geneExpression), etc.
