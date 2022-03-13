@@ -141,12 +141,12 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
             entry = mongo_uploads.find({"object_id": requested_object_id},
                                        {"_id": 0, "object_id": 1})
             num_matches = _mongo_count("upload",mongo_uploads,{"object_id": requested_object_id},{})
-            logger.info(msg=f"[upload]found ({num_matches}) matches for requested object_id="+str(object_id))
+            logger.info(msg=f"[upload]found ({num_matches}) matches for requested object_id={object_id}")
             if num_matches == 0:
                 object_id = requested_object_id
 
-        logger.info(msg=f"[upload]object_id="+str(object_id))
-        logger.info(msg=f"[upload]client file_name="+str(client_file.filename))
+        logger.info(msg=f"[upload]object_id={object_id}")
+        logger.info(msg=f"[upload]client file_name={client_file.filename}")
 
         drs_uri = f"drs:///{g_host_name}:{g_host_port}/{g_container_network}/{g_container_name}:{g_container_port}/{object_id}",
         logger.info(msg=f"[upload]drs_uri={drs_uri}")
@@ -171,9 +171,9 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
                      "status": "started",
                      "stderr": None
                      }
-        logger.info(msg=f"[upload] new object metatdata = " + str(meta_data))
+        logger.info(msg=f"[upload] new object metatdata = {meta_data}")
         row_id = mongo_uploads.insert_one(meta_data).inserted_id
-        logger.info(msg=f"[upload] new row_id = " + str(row_id))
+        logger.info(msg=f"[upload] new row_id = {row_id}")
 
         local_path = _file_path(object_id)
         os.mkdir(local_path)
@@ -190,17 +190,17 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
         mime = magic.Magic(mime=True)
         mime_type = mime.from_file(file_path)
         if mime_type != 'application/zip' and mime_type != 'application/csv':
-            raise Exception(f'Wrong file type: {mime_type}')
+            raise Exception(f"Wrong file type: {mime_type}")
         logger.info(msg=f"[upload] file type = {mime_type}")
         
         contents_list = []
         if mime_type == 'application/zip':
-            logger.info(msg=f"[upload] reading zip = "+str(file_path))
+            logger.info(msg=f"[upload] reading zip = {file_path}")
             zip = zipfile.ZipFile(file_path)    
             for subfile_path in zip.namelist():
-                logger.info(msg=f"[upload]   subfile_path = "+str(subfile_path))
+                logger.info(msg=f"[upload]   subfile_path = {subfile_path}")
                 [path_head, subfile_name] = os.path.split(subfile_path)
-                logger.info(msg=f"[upload]   subfile_name = "+str(subfile_name))
+                logger.info(msg=f"[upload]   subfile_name = {subfile_name}")
                 subfile_drs_uri = f"{drs_uri}/{subfile_name}"
                 logger.info(msg=f"[upload]   subfile_drs_uri={subfile_drs_uri}")
                 file_obj = {}
@@ -228,7 +228,7 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
         logger.info(msg=f"[upload] status of {object_id} updated to 'finished'")
         # maybe check here if the file is an archive, and if so, set the list of files attribute
         ret_val = {"object_id": object_id}
-        logger.info(msg=f"[upload] Done. Returning: " + str(ret_val))
+        logger.info(msg=f"[upload] Done. Returning: {ret_val}")
         return ret_val
     
     except Exception as e:
@@ -237,7 +237,7 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
         try:
             mongo_uploads.update_one({"object_id": object_id},
                                      {"$set": {"start_date": datetime.datetime.utcnow(), "status": "failed"}})
-            logger.info(msg=f"[upload] exception, setting upload status to failed for "+object_id)
+            logger.info(msg=f"[upload] exception, setting upload status to failed for {object_id}")
         except:
             pass
         
@@ -249,10 +249,10 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
 @app.get("/search/{submitter_id}", summary="Get infos for all the DrsObject for this submitter_id.")
 async def objects_search(submitter_id: str = Path(default="", description="submitter_id of user that uploaded the archive")):
     try:
-        logger.info(msg=f"[search] submitter_id:" + str(submitter_id))
+        logger.info(msg=f"[search] submitter_id:{submitter_id}")
         ret = list(map(lambda a: a, mongo_uploads.find({"submitter_id": submitter_id},
                                                        {"_id": 0, "object_id": 1})))
-        logger.info(msg=f"[search] ret:" + str(ret))
+        logger.info(msg=f"[search] ret:{ret}")
         return ret
     
     except Exception as e:
@@ -280,7 +280,7 @@ async def delete(object_id: str):
     ret_mongo=""
     ret_mongo_err=""
     try:
-        logger.warn(msg=f"[delete] Deleting object_id:" + str(object_id))
+        logger.warn(msg=f"[delete] Deleting object_id: {object_id}")
         ret = mongo_uploads.delete_one({"object_id": object_id})
         #<class 'pymongo.results.DeleteResult'>
         delete_status = "deleted"
@@ -291,30 +291,30 @@ async def delete(object_id: str):
         if ret.deleted_count != 1:
             # should never happen if index was created for this field
             delete_status = "failed"
-            ret_mongo += "Wrong number of records deleted ("+str(ret.deleted_count)+")./n"
-            logger.error(msg=f"[delete] delete failed, wrong number deleted, count[1]="+str(ret.deleted_count))
+            ret_mongo += f"Wrong number of records deleted ({ret.deleted_count})."
+            logger.error(msg=f"[delete] delete failed, wrong number deleted, count[1]={ret.deleted_count}")
         ## xxx
         # could check if there are any remaining; but this should instead be enforced by creating an index for this columnxs
         # could check ret.raw_result['n'] and ['ok'], but 'ok' seems to always be 1.0, and 'n' is the same as deleted_count
         ##
         ret_mongo += "Deleted count=("+str(ret.deleted_count)+"), Acknowledged=("+str(ret.acknowledged)+")./n"
     except Exception as e:
-        logger.error(msg=f"[delete] Exception {0} occurred while deleting {1} from database\n".format(type(e), object_id))
-        ret_mongo_err += "! Exception {0} occurred while deleting {1} from database, message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc())
+        logger.error(msg=f"[delete] Exception {type(e)} occurred while deleting {object_id} from database")
+        ret_mongo_err += f"! Exception {type(e)} occurred while deleting {object_id} from database, message=[{e}] \n! traceback=\n{traceback.format_exc()}"
         delete_status = "exception"
         
     # Data are cached on a mounted filesystem, unlink that too if it's there
-    logger.info(msg=f"[delete] Deleting "+str(object_id)+" from file system\n")
+    logger.info(msg=f"[delete] Deleting {object_id} from file system")
     ret_os=""
     ret_os_err=""
     try:
         local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-        local_path = os.path.join(local_path, object_id + f"-data")
-        logger.info(msg=f"[delete] removing tree ("+str(local_path)+")\n")
+        local_path = os.path.join(local_path, f"{object_id}-data")
+        logger.info(msg=f"[delete] removing tree ({local_path})")
         shutil.rmtree(local_path,ignore_errors=False)
     except Exception as e:
-        logger.error(msg=f"[delete] Exception "+str(type(e))+" occurred while deleting "+str(object_id)+" from filesystem\n")
-        ret_os_err += "! Exception {0} occurred while deleting job from filesystem, message=[{1}] \n! traceback=\n{2}\n".format(type(e), e, traceback.format_exc())
+        logger.error(msg=f"[delete] Exception {type(e} occurred while deleting {object_id} from filesystem")
+        ret_os_err += f"! Exception {type(e)} occurred while deleting job from filesystem, message=[{e}] \n! traceback=\n{traceback.format_exc()}"
         delete_status = "exception"
 
     ret = {
@@ -322,7 +322,7 @@ async def delete(object_id: str):
         "info": ret_mongo + ret_os,
         "stderr": ret_mongo_err + ret_os_err
     }
-    logger.info(msg=f"[delete] returning ("+str(ret)+")\n")
+    logger.info(msg=f"[delete] returning ({ret})")
     return ret
 
 # xxx parse {object_id} for '/' - if found, retrieve a specific file from within the archive
@@ -330,7 +330,7 @@ async def delete(object_id: str):
 def get_file(object_id: str):
     try:
         file_path = _file_path(object_id)
-        logger.info(msg=f"[get_file] Retrieving "+str(object_id)+" at "+file_path+"\n")
+        logger.info(msg=f"[get_file] Retrieving {object_id} at {file_path}")
 
         assert os.path.isdir(file_path)
         assert len(os.listdir(file_path)) >= 1
@@ -345,10 +345,9 @@ def get_file(object_id: str):
         assert num_matches == 1
         logger.info(msg=f"[get_file] total entries found = {num_matches}")
         file_name= entry[0]["name"]
-        logger.info(msg=f"[get_file] filename = "+str(file_name))
+        logger.info(msg=f"[get_file] filename = {file_name}")
         media_type = entry[0]["mime_type"]
-        logger.info(msg=f"[get_file] media_type = "+str(media_type))
-
+        logger.info(msg=f"[get_file] media_type = {media_type}")
         response = StreamingResponse(iterfile(file_path), media_type=media_type)
         response.headers["Content-Disposition"] = "attachment; filename="+file_name
         return response
@@ -403,7 +402,7 @@ async def objects(object_id: str = Path(default="", description="DrsObject ident
         num_matches = _mongo_count("objects", mongo_uploads, {"object_id": object_id}, {})
         logger.info(msg=f"[objects] total found for [{object_id}]={num_matches}")
         assert num_matches == 1
-        logger.info(msg=f"[objects] found Object["+object_id+"]="+str(entry[0])+"\n")
+        logger.info(msg=f"[objects] found Object[{object_id}]={entry[0]}")
         obj = entry[0]
         del obj['_id']
         # xxx how does this get validated?
