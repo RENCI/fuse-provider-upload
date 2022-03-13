@@ -6,9 +6,6 @@ from pydantic import BaseModel
 from typing import Type, Optional, List
 from fastapi import File, UploadFile, Form, Depends, HTTPException, Query
 
-import docker
-
-from docker.errors import ContainerError
 import traceback
 
 def as_form(cls: Type[BaseModel]):

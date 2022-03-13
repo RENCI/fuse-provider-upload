@@ -1,4 +1,4 @@
-
+import uvicorn
 import datetime
 import os
 import shutil
@@ -7,10 +7,8 @@ from multiprocessing import Process
 from typing import List, Optional
 
 import aiofiles
-import docker
 import pymongo
 
-from docker.errors import ContainerError
 from fastapi import FastAPI, Depends, Path, Query, Body, File, UploadFile
 from fastapi import  Form, HTTPException
 from fastapi.logger import logger
@@ -21,6 +19,8 @@ from bson.json_util import dumps, loads
 
 import traceback
 
+import zipfile
+
 from fuse.models.Objects import Passports, ProviderExampleObject, Checksums
 from logging.config import dictConfig
 import logging
@@ -30,21 +30,13 @@ dictConfig(LogConfig().dict())
 logger = logging.getLogger("fuse-provider-upload")
 # https://stackoverflow.com/questions/63510041/adding-python-logging-to-fastapi-endpoints-hosted-on-docker-doesnt-display-api
 
-import pymongo
-#mongo_client = pymongo.MongoClient('mongodb://%s:%s@upload-tx-persistence:27018/test' % (os.getenv('MONGO_NON_ROOT_USERNAME'), os.getenv('MONGO_NON_ROOT_PASSWORD')))
-#mongo_db = mongo_client["test"]
-#mongo_db_datasets_column = mongo_db["uploads"]
-mongo_client = pymongo.MongoClient('mongodb://%s:%s@upload-tx-persistence:27017/test' % (os.getenv('MONGO_NON_ROOT_USERNAME'), os.getenv('MONGO_NON_ROOT_PASSWORD')))
-mongo_db = mongo_client.test
-mongo_uploads=mongo_db.uploads
-
-app = FastAPI()
-
 g_host_name=os.getenv('HOST_NAME')
 g_host_port=os.getenv('HOST_PORT')
 g_container_network = os.getenv('CONTAINER_NETWORK')
 g_container_name=os.getenv('CONTAINER_NAME')
 g_container_port=os.getenv('CONTAINER_PORT')
+app = FastAPI()
+
 origins = [
     f"http://{g_host_name}:{g_host_port}",
     f"http://{g_host_name}",
@@ -60,6 +52,42 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+import pymongo
+#mongo_client = pymongo.MongoClient('mongodb://%s:%s@upload-tx-persistence:27018/test' % (os.getenv('MONGO_NON_ROOT_USERNAME'), os.getenv('MONGO_NON_ROOT_PASSWORD')))
+#mongo_db = mongo_client["test"]
+#mongo_db_datasets_column = mongo_db["uploads"]
+mongo_client_str = os.getenv("MONGO_CLIENT")
+logger.info(msg=f"[MAIN] connecting to {mongo_client_str}")
+mongo_client = pymongo.MongoClient(mongo_client_str)
+
+mongo_db = mongo_client.test
+mongo_db_version = mongo_db.command({'buildInfo':1})['version']
+mongo_db_major_version = mongo_client.server_info()["versionArray"][0]
+mongo_db_minor_version = mongo_client.server_info()["versionArray"][1]
+mongo_uploads=mongo_db.uploads
+
+# mongo migration functions to support running outside of container with more current instance
+def _mongo_insert(fn, coll, obj):
+        if mongo_db_major_version < 4:
+            logger.info(msg=f"[{fn}] using collection.insert")
+            coll.insert(obj)
+        else:
+            logger.info(msg=f"[{fn}] using collection.insert_one")
+            coll.insert_one(obj)
+
+def _mongo_count(fn, coll, obj, projection):
+    if mongo_db_major_version < 3 and mongo_db_minor_version < 7:
+        logger.info(msg=f"[{fn}] mongodb version = {mongo_db_version}, use deprecated entry count function")
+        entry = coll.find(obj, projection)
+        num_matches= entry[0].count()
+    else: 
+        logger.info(msg=f"[{fn}] mongo_db version = {mongo_db_version}, use count_documents function")
+        num_matches=coll.count_documents(obj)
+    logger.info(msg=f"[{fn}]found ({num_matches}) matches")
+    return num_matches
+# end mongo migration functions
+            
 
 import pathlib
 import json
@@ -93,7 +121,7 @@ def _valid_contents(data_type, contents_list):
 # for example, an array of parameter names can be retrieved with:
 # curl -X 'GET'    'http://localhost:8083/openapi.json' -H 'accept: application/json' 2> /dev/null |python -m json.tool |jq '.paths."/submit".post.parameters[].name' 
 @app.post("/submit", description="Submit a digital object to be stored by this data provider")
-async def upload(submitter_id: str = Query(default=None, description="unique identifier for the submitter (e.g., email)"),
+async def upload(submitter_id: str = Query(default=..., description="unique identifier for the submitter (e.g., email)"),
                  data_type: Optional[DataType] = Query(default="gene-expression-dataset", description="the type of data; options are: dataset-geneExpression, results-pca, results-cellularFunction. Only gene-expression-dataset is supported by this provider"),
                  description: Optional[str] = Query(default=None, description="optional description of this object"),
                  version: Optional[str] = Query(default="1.0", description="version of this object; objects should never be deleted unless data are redacted"),
@@ -148,41 +176,43 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
 
         local_path = _file_path(object_id)
         os.mkdir(local_path)
-        logger.info(msg=f"[upload] localpath = "+str(local_path))
+        logger.info(msg=f"[upload] localpath = {local_path}")
         file_path = os.path.join(local_path, client_file.filename)
         #logger.info(msg=f"[upload] filepath = "+str(file_path))
         async with aiofiles.open(file_path, 'wb') as out_file:
             contents = await client_file.read()
             await out_file.write(contents)
+        logger.info(msg=f"[upload] file upload done.")
         
         # For MIME types
         import magic
         mime = magic.Magic(mime=True)
         mime_type = mime.from_file(file_path)
-        if mime_type != 'application/zip':
-            raise Exception("Wrong file type: "+str(mime_type))
+        if mime_type != 'application/zip' and mime_type != 'application/csv':
+            raise Exception(f'Wrong file type: {mime_type}')
+        logger.info(msg=f"[upload] file type = {mime_type}")
         
         contents_list = []
-        import zipfile
-        zip = zipfile.ZipFile(file_path)    
-        logger.info(msg=f"[upload] reading zip = "+str(file_path))
-        for subfile_path in zip.namelist():
-            logger.info(msg=f"[upload]   subfile_path = "+str(subfile_path))
-            [path_head, subfile_name] = os.path.split(subfile_path)
-            logger.info(msg=f"[upload]   subfile_name = "+str(subfile_name))
-            subfile_drs_uri = f"{drs_uri}/{subfile_name}"
-            logger.info(msg=f"[upload]   subfile_drs_uri={subfile_drs_uri}")
-            file_obj = {}
-            file_obj["id"] = subfile_name
-            file_obj["name"] = subfile_name         
-            file_obj["drs_uri"] = subfile_drs_uri
-            file_obj["contents"] = None
-            # full_path is format: archive_name/file_name
-            file_obj["full_path"] = subfile_path
-            # use full_path to extract from archive; e.g.:
-            #   with zip.open(full_path) as f:
-            #     f.read()
-            contents_list.append(file_obj)
+        if mime_type == 'application/zip':
+            logger.info(msg=f"[upload] reading zip = "+str(file_path))
+            zip = zipfile.ZipFile(file_path)    
+            for subfile_path in zip.namelist():
+                logger.info(msg=f"[upload]   subfile_path = "+str(subfile_path))
+                [path_head, subfile_name] = os.path.split(subfile_path)
+                logger.info(msg=f"[upload]   subfile_name = "+str(subfile_name))
+                subfile_drs_uri = f"{drs_uri}/{subfile_name}"
+                logger.info(msg=f"[upload]   subfile_drs_uri={subfile_drs_uri}")
+                file_obj = {}
+                file_obj["id"] = subfile_name
+                file_obj["name"] = subfile_name         
+                file_obj["drs_uri"] = subfile_drs_uri
+                file_obj["contents"] = None
+                # full_path is format: archive_name/file_name
+                file_obj["full_path"] = subfile_path
+                # use full_path to extract from archive; e.g.:
+                #   with zip.open(full_path) as f:
+                #     f.read()
+                contents_list.append(file_obj)
 
         assert _valid_contents(data_type, contents_list)
 
@@ -194,9 +224,10 @@ async def upload(submitter_id: str = Query(default=None, description="unique ide
                                      "contents": contents_list,
                                      "status": "finished"
                                  }})
+        logger.info(msg=f"[upload] status of {object_id} updated to 'finished'")
         # maybe check here if the file is an archive, and if so, set the list of files attribute
         ret_val = {"object_id": object_id}
-        logger.info(msg=f"[upload] returning: " + str(ret_val))
+        logger.info(msg=f"[upload] Done. Returning: " + str(ret_val))
         return ret_val
     
     except Exception as e:
@@ -309,8 +340,9 @@ def get_file(object_id: str):
                     yield from file_data
 
         entry = mongo_uploads.find({"object_id": object_id}, {"mime_type":1, "name":1})
-        assert entry.count() == 1
-        logger.info(msg=f"[get_file] total entries found = "+str(entry.count()))
+        num_matches = _mongo_count("get_file", mongo_uploads, {"object_id": object_id}, {})
+        assert num_matches == 1
+        logger.info(msg=f"[get_file] total entries found = {num_matches}")
         file_name= entry[0]["name"]
         logger.info(msg=f"[get_file] filename = "+str(file_name))
         media_type = entry[0]["mime_type"]
@@ -367,8 +399,9 @@ async def objects(object_id: str = Path(default="", description="DrsObject ident
     '''
     try:
         entry = mongo_uploads.find({"object_id": object_id})
-        logger.info(msg=f"[objects] total found for ["+object_id+"]="+str(entry.count())+"\n")
-        assert entry.count() == 1
+        num_matches = _mongo_count("objects", mongo_uploads, {"object_id": object_id}, {})
+        logger.info(msg=f"[objects] total found for [{object_id}]={num_matches}")
+        assert num_matches == 1
         logger.info(msg=f"[objects] found Object["+object_id+"]="+str(entry[0])+"\n")
         obj = entry[0]
         del obj['_id']
@@ -430,3 +463,5 @@ async def post_objects(object_id: str=Path(default="", description="DrsObject id
         "headers": "Authorization: None"
     }
 
+if __name__=='__main__':
+        uvicorn.run("main:app", host='0.0.0.0', port=int(os.getenv("HOST_PORT")), reload=True )

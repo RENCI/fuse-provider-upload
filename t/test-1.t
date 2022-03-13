@@ -28,6 +28,7 @@ our $verbose = 0;
 our $dry_run = 0;
 
 our $OBJID="test_object_id";
+our $OBJID2="test_csv_object_id";
 our $SUBMITTER_ID='test@email.com';
 our $ACCESSID="None";
 our $PASSPORTS='["foo" "bar"]';
@@ -59,26 +60,26 @@ files_eq(f($fn), "t/out/${fn}",                                                 
 $fn = "write-1.json";
 files_eq(f($fn), cmd("POST", $fn, "submit?submitter_id=${SUBMITTER_ID}&requested_object_id=${OBJID}&data_type=dataset-geneExpression&version=1.0",
 		     "-F 'client_file=@./t/input/for-testing.zip;type=application/zip' -H 'Content-Type: multipart/form-data' -H 'accept: application/json'"),
-	                                                                                                   "($fn) Submit an object");
+	                                                                                                   "($fn) Submit zip file");
 
 $fn = "DRS-2.json";
 generalize_output($fn, cmd("GET", rawf($fn), "objects/{$OBJID}"), ["created_time", "updated_time"]);
-files_eq(f($fn), "t/out/${fn}",                                                                            "($fn) Get info about DRS object");
+files_eq(f($fn), "t/out/${fn}",                                                                            "($fn) Get info about zip DRS object");
 
 $fn = "DRS-3.empty";
 files_eq(f($fn), cmd("GET",$fn, "files/${OBJID}", "--output t/out/for-testing-zip"),                       "($fn) Get the zip'd file");
 $fn = "DRS-4.empty";
-files_eq("t/input/for-testing.zip", "t/out/for-testing-zip",                                               "($fn) Ensure retrieved file is correct");
+files_eq("t/input/for-testing.zip", "t/out/for-testing-zip",                                               "($fn) Ensure retrieved zip'd file is correct");
 
 $fn = "write-2.json";
 files_eq(f($fn), cmd("GET",$fn, "search/{$SUBMITTER_ID}"),                                                 "($fn) Get list of objects submitted by $SUBMITTER_ID");
 
 # In a typical use case, never delete data; see documentation
 $fn = "write-3.json";
-files_eq(f($fn), cmd("DELETE", $fn, "delete/${OBJID}"),                                                    "($fn) Delete the object (status=deleted)");
+files_eq(f($fn), cmd("DELETE", $fn, "delete/${OBJID}"),                                                    "($fn) Delete the zip'd object (status=deleted)");
 $fn = "write-4.json";
 generalize_output($fn, cmd("DELETE", rawf($fn), "delete/${OBJID}"), ["stderr"]);
-files_eq(f($fn), "t/out/${fn}",                                                                            "($fn) Delete the object again (status=exception)");
+files_eq(f($fn), "t/out/${fn}",                                                                            "($fn) Delete the zip'd object again (status=exception)");
 
 
 

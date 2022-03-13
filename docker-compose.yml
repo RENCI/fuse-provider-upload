@@ -4,12 +4,13 @@ services:
   fuse-provider-upload:
     container_name: ${CONTAINER_NAME}
     build: .
+    restart: always
     env_file: .env
     ports:
       - ${HOST_PORT}:${CONTAINER_PORT}
     volumes:
         - /var/run/docker.sock:/var/run/docker.sock
-        - ./config/service_info.json:/app/service_info.json
+        - ./service_info.json:/app/service_info.json
         - ./data:/app/data
     networks:
       - upload_network
