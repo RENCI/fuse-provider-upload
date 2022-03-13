@@ -1,0 +1,23 @@
+{
+  "access_methods": null,
+  "aliases": null,
+  "checksums": null,
+  "contents": [],
+  "created_time": "xxx",
+  "data_type": "dataset-geneExpression",
+  "description": null,
+  "file_type": "dataset-geneExpression",
+  "id": "test_csv_object_id",
+  "mime_type": "application/csv",
+  "name": "phenotypes.csv",
+  "object_id": "test_csv_object_id",
+  "self_uri": [
+    "drs:///localhost:8083/fuse/fuse-provider-upload:8000/test_csv_object_id"
+  ],
+  "size": 4101,
+  "status": "finished",
+  "stderr": null,
+  "submitter_id": "test@email.com",
+  "updated_time": "xxx",
+  "version": "1.0"
+}

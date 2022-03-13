@@ -1,5 +1,8 @@
 [
   {
     "object_id": "test_object_id"
+  },
+  {
+    "object_id": "test_csv_object_id"
   }
 ]
