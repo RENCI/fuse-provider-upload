@@ -231,6 +231,7 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
         return ret_val
     
     except Exception as e:
+        detail_str=f"! Exception {type(e)} occurred while running upload for ({object_id}), message=[{e}] \n! traceback=\n{traceback.format_exc()}"
         # assume the upload failed and update the status accordingly;
         # but take care that the update doesn't throw an exception that might force the 404 to not get raised.
         try:
@@ -239,9 +240,7 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
             logger.info(msg=f"[upload] exception, setting upload status to failed for {object_id}")
         except:
             pass
-        
-        raise HTTPException(status_code=404,
-                            detail="! Exception {0} occurred while running upload for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
+        raise HTTPException(status_code=404, detail=detail_str)
 
 # xxx check param defaults
 # xxx add parameters for finding object_id's of specific data_types (e.g., result-pca or dataset-geneExpression (DataType.geneExpression), etc.
@@ -256,7 +255,7 @@ async def objects_search(submitter_id: str = Path(default="", description="submi
     
     except Exception as e:
         raise HTTPException(status_code=404,
-                            detail="! Exception {0} occurred while searching for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
+                            detail=f"! Exception {type(e)} occurred while searching for ({object_id}), message=[{e}] \n! traceback=\n{traceback.format_exc()}")
                        
 
 @app.delete("/delete/{object_id}", summary="DANGER ZONE: Delete a downloaded object; this action is rarely justified.")
@@ -352,7 +351,7 @@ def get_file(object_id: str):
         return response
     except Exception as e:
         raise HTTPException(status_code=404,
-                            detail="! Exception {0} occurred while retrieving for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
+                            detail=f"! Exception {type(e)} occurred while retrieving for ({object_id}), message=[{e}] \n! traceback=\n{traceback.format_exc()}")
              
 
 # ----------------- GA4GH endpoints ---------------------
@@ -411,7 +410,7 @@ async def objects(object_id: str = Path(default="", description="DrsObject ident
         #return example_object.dict()
     except Exception as e:
         raise HTTPException(status_code=404,
-                            detail="! Exception {0} occurred while searching for ({1}), message=[{2}] \n! traceback=\n{3}\n".format(type(e), object_id, e, traceback.format_exc()))
+                            detail="! Exception {type(e)} occurred while searching for ({object_id}), message=[{e}] \n! traceback=\n{traceback.format_exc()}")
 
 # xxx add value for passport example that doesn't cause server error
 # xxx figure out how to add the following description to 'passports':
