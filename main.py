@@ -136,12 +136,13 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
     - File status: will be set in the persistent database as 'started' when the upload begins, 'failed' if an exception is thrown', and 'finished' when complete, in accordance with redis job.status() codes.
     '''
     try:
+        # xxx use _gen_object_id here, but first replace _mongo_count signature to remove {fn}, projection file-wide
         object_id = f"upload_{submitter_id}_{uuid.uuid4()}"
         if requested_object_id != None:
             entry = mongo_uploads.find({"object_id": requested_object_id},
                                        {"_id": 0, "object_id": 1})
             num_matches = _mongo_count("upload",mongo_uploads,{"object_id": requested_object_id},{})
-            logger.info(msg=f"[upload]found ({num_matches}) matches for requested object_id={object_id}")
+            logger.info(msg=f"[upload]found ({num_matches}) matches for requested object_id={requested_object_id}")
             if num_matches == 0:
                 object_id = requested_object_id
 
