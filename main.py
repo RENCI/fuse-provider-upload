@@ -190,7 +190,7 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
         mime = magic.Magic(mime=True)
         mime_type = mime.from_file(file_path)
         logger.info(msg=f"[upload] file type = {mime_type}")
-        assert(mime_type == 'application/zip' or mime_type == 'application/csv' or mime_type == 'text/csv')
+        assert(mime_type == 'application/zip' or mime_type == 'application/csv' or mime_type == 'text/csv' or mime_type == 'text/plain')
         
         contents_list = []
         if mime_type == 'application/zip':
