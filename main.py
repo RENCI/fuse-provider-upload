@@ -269,6 +269,9 @@ async def delete(object_id: str):
     - status = 'failed' if 0 or greater than 1 object is not found in database.
     '''
     delete_status = "done"
+    info = ""
+    stderr = ""
+    
     ret_mongo=""
     ret_mongo_err=""
     try:
@@ -294,12 +297,11 @@ async def delete(object_id: str):
         logger.error(msg=f"[delete] Exception {type(e)} occurred while deleting {object_id} from database")
         ret_mongo_err += f"! Exception {type(e)} occurred while deleting {object_id} from database, message=[{e}] \n! traceback=\n{traceback.format_exc()}"
         delete_status = "exception"
-        
+
     # Data are cached on a mounted filesystem, unlink that too if it's there
     logger.info(msg=f"[delete] Deleting {object_id} from file system")
     ret_os=""
     ret_os_err=""
-    stderr=""
     try:
         local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
         local_path = os.path.join(local_path, f"{object_id}-data")
@@ -309,19 +311,20 @@ async def delete(object_id: str):
         logger.error(msg=f"[delete] Exception {type(e)} occurred while deleting {object_id} from filesystem")
         ret_os_err += f"! Exception {type(e)} occurred while deleting job from filesystem, message=[{e}] \n! traceback=\n{traceback.format_exc()}"
         delete_status = "exception"
-
-    stderr = f"{ret_mongo_err}\n {ret_os_err}"
-    info = f"{ret_mongo}\n {ret_os}"
-    ret = {
-        "status": delete_status,
-        "info": info,
-        "stderr": stderr
-    }
-    logger.info(msg=f"[delete] returning ({ret})")
-    if delete_status != "deleted":
-            raise HTTPException(status_code=404,
-                                detail=f"! Message=[{info}]   Error while deleting ({object_id}), status=[{delete_status}] stderr=[{stderr}]")
-    return ret
+    try:
+        info = f"{ret_mongo}\n {ret_os}"
+        stderr = f"{ret_mongo_err}\n {ret_os_err}"
+        ret = {
+            "status": delete_status,
+            "info": info,
+            "stderr": stderr
+        }
+        logger.info(msg=f"[delete] returning ({ret})")
+        assert ret["status"] == "deleted"
+        return ret
+    except Exception as e:
+        raise HTTPException(status_code=404,
+                            detail=f"! Message=[{info}]   Error while deleting ({object_id}), status=[{delete_status}] stderr=[{stderr}]")
 
 # xxx parse {object_id} for '/' - if found, retrieve a specific file from within the archive
 @app.get("/files/{object_id}")
