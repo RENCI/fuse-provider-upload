@@ -299,6 +299,7 @@ async def delete(object_id: str):
     logger.info(msg=f"[delete] Deleting {object_id} from file system")
     ret_os=""
     ret_os_err=""
+    stderr=""
     try:
         local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
         local_path = os.path.join(local_path, f"{object_id}-data")
@@ -309,12 +310,17 @@ async def delete(object_id: str):
         ret_os_err += f"! Exception {type(e)} occurred while deleting job from filesystem, message=[{e}] \n! traceback=\n{traceback.format_exc()}"
         delete_status = "exception"
 
+    stderr = f"{ret_mongo_err}\n {ret_os_err}"
+    info = f"{ret_mongo}\n {ret_os}"
     ret = {
         "status": delete_status,
-        "info": ret_mongo + ret_os,
-        "stderr": ret_mongo_err + ret_os_err
+        "info": info,
+        "stderr": stderr
     }
     logger.info(msg=f"[delete] returning ({ret})")
+    if delete_status != "deleted":
+            raise HTTPException(status_code=404,
+                                detail=f"! Message=[{info}]   Error while deleting ({object_id}), status=[{delete_status}] stderr=[{stderr}]")
     return ret
 
 # xxx parse {object_id} for '/' - if found, retrieve a specific file from within the archive
