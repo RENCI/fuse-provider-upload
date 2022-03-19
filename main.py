@@ -100,6 +100,8 @@ def _file_path(object_id):
 from enum import Enum
 class DataType(str, Enum):
     geneExpression='dataset-geneExpression'
+    resultsPCATable='results-PCATable'
+    resultsCellFIE='results-CellFIE'
     # xxx to add more datatypes: expand this
 
 def _valid_contents(data_type, contents_list):

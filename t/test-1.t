@@ -29,7 +29,7 @@ our $dry_run = 0;
 
 our $OBJID="test_object_id";
 our $OBJID2="test_csv_object_id";
-our $SUBMITTER_ID='test@email.com';
+our $SUBMITTER_ID='test-xxx@email.com';
 our $ACCESSID="None";
 our $PASSPORTS='["foo" "bar"]';
 
