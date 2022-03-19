@@ -109,6 +109,10 @@ def _valid_contents(data_type, contents_list):
         for file in contents_list:
             if file["name"] not in ["geneBySampleMatrix.csv", "phenoDataMatrix.csv"]:
                 raise Exception(f"[_valid_contents] Unknown file {file} for data-type: {data_type}")
+    elif data_type == DataType.resultsPCATable:
+            pass
+    elif data_type == DataType.resultsCellFIE:
+            pass
     # xxx to add more datatypes: expand this
     else:
         raise Exception(f"[_valid_contents] Unknown data-type: {data_type}")
