@@ -58,12 +58,12 @@ generalize_output($fn, cmd("GET", rawf($fn), "service-info"), ["createdAt", "upd
 files_eq(f($fn), "t/out/${fn}",                                                    "($fn) Get config for this service");
 
 $fn = "write-1.json";
-files_eq(f($fn), cmd("POST", $fn, "submit?submitter_id=${SUBMITTER_ID}&requested_object_id=${OBJID}&data_type=dataset-geneExpression&version=1.0",
+files_eq(f($fn), cmd("POST", $fn, "submit?submitter_id=${SUBMITTER_ID}&requested_object_id=${OBJID}&data_type=dataset-geneExpression&file_type=filetype-dataset-archive&version=1.0",
 		     "-F 'client_file=@./t/input/for-testing.zip;type=application/zip' -H 'Content-Type: multipart/form-data' -H 'accept: application/json'"),
 	                                                                                                   "($fn) Submit zip file");
 
 $fn = "write-1b.json";
-files_eq(f($fn), cmd("POST", $fn, "submit?submitter_id=${SUBMITTER_ID}&requested_object_id=${OBJID2}&data_type=dataset-geneExpression&version=1.0",
+files_eq(f($fn), cmd("POST", $fn, "submit?submitter_id=${SUBMITTER_ID}&requested_object_id=${OBJID2}&data_type=dataset-geneExpression&file_type=filetype-dataset-expression&version=1.0",
 		     "-F 'client_file=@./t/input/phenotypes.csv;type=application/csv' -H 'Content-Type: multipart/form-data' -H 'accept: application/json'"),
 	                                                                                                   "($fn) Submit csv file");
 

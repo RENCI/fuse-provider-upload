@@ -21,7 +21,7 @@
   "created_time": "xxx",
   "data_type": "dataset-geneExpression",
   "description": null,
-  "file_type": "dataset-geneExpression",
+  "file_type": "filetype-dataset-archive",
   "id": "test_object_id",
   "mime_type": "application/zip",
   "name": "for-testing.zip",

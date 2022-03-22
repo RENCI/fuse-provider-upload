@@ -35,7 +35,24 @@ g_host_port=os.getenv('HOST_PORT')
 g_container_network = os.getenv('CONTAINER_NETWORK')
 g_container_name=os.getenv('CONTAINER_NAME')
 g_container_port=os.getenv('CONTAINER_PORT')
-app = FastAPI()
+
+g_api_version="0.0.1"
+
+app = FastAPI(openapi_url=f"/api/{g_api_version}/openapi.json",
+              title="Upload Provider",
+              description="Fuse-certified Tool for serving data that can be submitted by individuals. Can stand alone or integrated with other data sources and tools using http://github.com/RENCI/fuse-agent.",
+              version=g_api_version,
+              terms_of_service="https://github.com/RENCI/fuse-agent/doc/terms.pdf",
+              contact={
+                  "name": "Maintainer(Kimberly Robasky)",
+                  "url": "http://txscience.renci.org/contact/",
+                  "email": "kimberly.robasky@gmail.com"
+            },
+            license_info={
+            "name": "MIT License",
+                "url": "https://github.com/RENCI/fuse-tool-pca/blob/main/LICENSE"
+            }
+              )
 
 origins = [
     f"http://{g_host_name}:{g_host_port}",
@@ -104,6 +121,14 @@ class DataType(str, Enum):
     resultsCellFIE='results-CellFIE'
     # xxx to add more datatypes: expand this
 
+class FileType(str, Enum):
+    datasetGeneExpression='filetype-dataset-expression'
+    datasetProperties='filetype-dataset-propterties'
+    datasetArchive='filetype-dataset-archive'
+    resultsPCATable='filetype-results-PCATable'
+    resultsCellFIE='filetype-results-CellFIE'
+    # xxx to add more datatypes: expand this
+
 def _valid_contents(data_type, contents_list):
     if data_type == DataType.geneExpression:
         for file in contents_list:
@@ -128,7 +153,8 @@ def _valid_contents(data_type, contents_list):
 # curl -X 'GET'    'http://localhost:8083/openapi.json' -H 'accept: application/json' 2> /dev/null |python -m json.tool |jq '.paths."/submit".post.parameters[].name' 
 @app.post("/submit", description="Submit a digital object to be stored by this data provider")
 async def upload(submitter_id: str = Query(default=..., description="unique identifier for the submitter (e.g., email)"),
-                 data_type: Optional[DataType] = Query(default="gene-expression-dataset", description="the type of data; options are: dataset-geneExpression, results-pca, results-cellularFunction. Only gene-expression-dataset is supported by this provider"),
+                 data_type: DataType = Query(default=..., description="the type of data; options are: dataset-geneExpression, results-pca, results-cellularFunction. Only gene-expression-dataset is supported by this provider"),
+                 file_type: FileType = Query(default=..., description="the type of file"),
                  description: Optional[str] = Query(default=None, description="optional description of this object"),
                  version: Optional[str] = Query(default="1.0", description="version of this object; objects should never be deleted unless data are redacted"),
                  aliases: Optional[str] = Query(default=None, description="optional list of aliases for this object"),
@@ -174,7 +200,7 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
                      "contents": None,
                      "data_type": data_type,
                      "submitter_id": submitter_id,
-                     "file_type": data_type,
+                     "file_type": file_type,
                      "status": "started",
                      "stderr": None
                      }

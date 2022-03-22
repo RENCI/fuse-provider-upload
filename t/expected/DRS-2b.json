@@ -6,7 +6,7 @@
   "created_time": "xxx",
   "data_type": "dataset-geneExpression",
   "description": null,
-  "file_type": "dataset-geneExpression",
+  "file_type": "filetype-dataset-expression",
   "id": "test_csv_object_id",
   "mime_type": "application/csv",
   "name": "phenotypes.csv",
