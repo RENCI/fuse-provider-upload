@@ -19,9 +19,9 @@
     }
   ],
   "created_time": "xxx",
-  "data_type": "dataset-geneExpression",
+  "data_type": "class_dataset_expression",
   "description": null,
-  "file_type": "filetype-dataset-archive",
+  "file_type": "filetype_dataset_archive",
   "id": "test_object_id",
   "mime_type": "application/zip",
   "name": "for-testing.zip",

@@ -84,27 +84,27 @@ mongo_db_major_version = mongo_client.server_info()["versionArray"][0]
 mongo_db_minor_version = mongo_client.server_info()["versionArray"][1]
 mongo_uploads=mongo_db.uploads
 
+# SHARED
 # mongo migration functions to support running outside of container with more current instance
 def _mongo_insert(fn, coll, obj):
-        if mongo_db_major_version < 4:
-            logger.info(msg=f"[{fn}] using collection.insert")
-            coll.insert(obj)
-        else:
-            logger.info(msg=f"[{fn}] using collection.insert_one")
-            coll.insert_one(obj)
+    if mongo_db_major_version < 4:
+        logger.info(msg=f"[{fn}] using collection.insert")
+        coll.insert(obj)
+    else:
+        logger.info(msg=f"[{fn}] using collection.insert_one")
+        coll.insert_one(obj)
 
-def _mongo_count(fn, coll, obj, projection):
+def _mongo_count(coll, obj):
     if mongo_db_major_version < 3 and mongo_db_minor_version < 7:
-        logger.info(msg=f"[{fn}] mongodb version = {mongo_db_version}, use deprecated entry count function")
-        entry = coll.find(obj, projection)
+        logger.info(msg=f"[_mongo_count] mongodb version = {mongo_db_version}, use deprecated entry count function")
+        entry = coll.find(obj, {})
         num_matches= entry[0].count()
     else: 
-        logger.info(msg=f"[{fn}] mongo_db version = {mongo_db_version}, use count_documents function")
+        logger.info(msg=f"[_mongo_count] mongo_db version = {mongo_db_version}, use count_documents function")
         num_matches=coll.count_documents(obj)
-    logger.info(msg=f"[{fn}]found ({num_matches}) matches")
+    logger.info(msg=f"[_mongo_count]found ({num_matches}) matches")
     return num_matches
 # end mongo migration functions
-            
 
 import pathlib
 import json
@@ -114,19 +114,21 @@ def _file_path(object_id):
     local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
     return os.path.join(local_path, f"{object_id}-data")
 
+# SHARED
+# xxx cdm
 from enum import Enum
 class DataType(str, Enum):
-    geneExpression='dataset-geneExpression'
-    resultsPCATable='results-PCATable'
-    resultsCellFIE='results-CellFIE'
+    geneExpression='class_dataset_expression'
+    resultsPCATable='class_results_PCATable'
+    resultsCellFIE='class_results_CellFIE'
     # xxx to add more datatypes: expand this
 
 class FileType(str, Enum):
-    datasetGeneExpression='filetype-dataset-expression'
-    datasetProperties='filetype-dataset-propterties'
-    datasetArchive='filetype-dataset-archive'
-    resultsPCATable='filetype-results-PCATable'
-    resultsCellFIE='filetype-results-CellFIE'
+    datasetGeneExpression='filetype_dataset_expression'
+    datasetProperties='filetype_dataset_properties'
+    datasetArchive='filetype_dataset_archive'
+    resultsPCATable='filetype_results_PCATable'
+    resultsCellFIE='filetype_results_CellFIE'
     # xxx to add more datatypes: expand this
 
 def _valid_contents(data_type, contents_list):
@@ -143,6 +145,22 @@ def _valid_contents(data_type, contents_list):
         raise Exception(f"[_valid_contents] Unknown data-type: {data_type}")
     return True
             
+# SHARED
+def _gen_object_id(prefix, submitter_id, requested_object_id, coll):
+    try:
+        object_id = f"{prefix}_{submitter_id}_{uuid.uuid4()}"
+        assert requested_object_id != None
+        logger.info(msg=f"[_gen_object_id] top prefex={prefix}, submitter={submitter_id}, requested:{requested_object_id}")
+        entry = coll.find({"object_id": requested_object_id},
+                          {"_id": 0, "object_id": 1})
+        num_matches = _mongo_count(coll, {"object_id": requested_object_id})
+        logger.info(msg=f"[_gen_object_id]found ({num_matches}) matches for requested object_id={requested_object_id}")
+        assert num_matches == 0
+        return requested_object_id
+    except Exception as e:
+        logger.warn(msg=f"[_gen_object_id] ? Exception {type(e)} occurred when using {requested_object_id}, using {object_id} instead. message=[{e}] ! traceback={traceback.format_exc()}")
+        logger.warn(msg=f"[_gen_object_id] ")
+        return object_id
     
 # API is described in:
 # http://localhost:8083/openapi.json
@@ -153,7 +171,7 @@ def _valid_contents(data_type, contents_list):
 # curl -X 'GET'    'http://localhost:8083/openapi.json' -H 'accept: application/json' 2> /dev/null |python -m json.tool |jq '.paths."/submit".post.parameters[].name' 
 @app.post("/submit", description="Submit a digital object to be stored by this data provider")
 async def upload(submitter_id: str = Query(default=..., description="unique identifier for the submitter (e.g., email)"),
-                 data_type: DataType = Query(default=..., description="the type of data; options are: dataset-geneExpression, results-pca, results-cellularFunction. Only gene-expression-dataset is supported by this provider"),
+                 data_type: DataType = Query(default=..., description="the type of data; options are: class_dataset_expression, class-results_PCATable, class_results_CellFIE."),
                  file_type: FileType = Query(default=..., description="the type of file"),
                  description: Optional[str] = Query(default=None, description="optional description of this object"),
                  version: Optional[str] = Query(default="1.0", description="version of this object; objects should never be deleted unless data are redacted"),
@@ -163,20 +181,13 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
                  client_file: UploadFile = File(...)):
     '''
     Please notes:
-    - mime-type: All submitted files must be of mime-type "application/zip"
-    - A data_type: of 'gene-expression-dataset' must be a zip containing files named geneBySampleMatrix.csv and phenoDataMatrix.csv. The former has entrez-gene ids on the columns and samples on the rows. There is no header. The latter has a header with arbitrary phenotype names on the columns and sample names on the rows. Row1 of phenoDataMatrix.csv corresponds to Column2 of geneBySampleMatrix.csv and so forth.
+    - mime-type: mime types are limited to text, csv, and archive
+    - A data_type: of 'class_dataset_expression' can either be a zip containing files named geneBySampleMatrix.csv and phenoDataMatrix.csv, or two separate files uploaded and with any file name. Expression data files have entrez-gene ids on the columns and samples on the rows. There is no header. The properties files (phenoDataMatrix.csv) has a header with arbitrary property/phenotype names on the columns and sample names on the rows. Row1 of phenoDataMatrix.csv corresponds to Column2 of geneBySampleMatrix.csv and so forth.
     - File status: will be set in the persistent database as 'started' when the upload begins, 'failed' if an exception is thrown', and 'finished' when complete, in accordance with redis job.status() codes.
     '''
     try:
         # xxx use _gen_object_id here, but first replace _mongo_count signature to remove {fn}, projection file-wide
-        object_id = f"upload_{submitter_id}_{uuid.uuid4()}"
-        if requested_object_id != None:
-            entry = mongo_uploads.find({"object_id": requested_object_id},
-                                       {"_id": 0, "object_id": 1})
-            num_matches = _mongo_count("upload",mongo_uploads,{"object_id": requested_object_id},{})
-            logger.info(msg=f"[upload]found ({num_matches}) matches for requested object_id={requested_object_id}")
-            if num_matches == 0:
-                object_id = requested_object_id
+        object_id = _gen_object_id("upload", submitter_id, requested_object_id, mongo_uploads)
 
         logger.info(msg=f"[upload]object_id={object_id}")
         logger.info(msg=f"[upload]client file_name={client_file.filename}")
@@ -270,7 +281,7 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
         raise HTTPException(status_code=404, detail=f"! Exception {type(e)} occurred while running upload for ({object_id}), message=[{e}] \n! traceback=\n{traceback.format_exc()}")
 
 # xxx check param defaults
-# xxx add parameters for finding object_id's of specific data_types (e.g., result-pca or dataset-geneExpression (DataType.geneExpression), etc.
+# xxx add parameters for finding object_id's of specific data_types (e.g., class_dataset_expression (DataType.geneExpression), etc.
 @app.get("/search/{submitter_id}", summary="Get infos for all the DrsObject for this submitter_id.")
 async def objects_search(submitter_id: str = Path(default="", description="submitter_id of user that uploaded the archive")):
     try:
@@ -375,7 +386,7 @@ def get_file(object_id: str):
                     yield from file_data
 
         entry = mongo_uploads.find({"object_id": object_id}, {"mime_type":1, "name":1})
-        num_matches = _mongo_count("get_file", mongo_uploads, {"object_id": object_id}, {})
+        num_matches = _mongo_count(mongo_uploads, {"object_id": object_id})
         assert num_matches == 1
         logger.info(msg=f"[get_file] total entries found = {num_matches}")
         file_name= entry[0]["name"]
@@ -433,7 +444,7 @@ async def objects(object_id: str = Path(default="", description="DrsObject ident
     '''
     try:
         entry = mongo_uploads.find({"object_id": object_id})
-        num_matches = _mongo_count("objects", mongo_uploads, {"object_id": object_id}, {})
+        num_matches = _mongo_count(mongo_uploads, {"object_id": object_id})
         logger.info(msg=f"[objects] total found for [{object_id}]={num_matches}")
         assert num_matches == 1
         logger.info(msg=f"[objects] found Object[{object_id}]={entry[0]}")
