@@ -161,6 +161,18 @@ def _gen_object_id(prefix, submitter_id, requested_object_id, coll):
         logger.warn(msg=f"[_gen_object_id] ? Exception {type(e)} occurred when using {requested_object_id}, using {object_id} instead. message=[{e}] ! traceback={traceback.format_exc()}")
         logger.warn(msg=f"[_gen_object_id] ")
         return object_id
+
+
+@app.post("/admin/objects", description="Admin function for listing all objects. Useful for debugging database inconsistencies")
+async def list_all():
+    try:
+        ret = list(map(lambda a: a, mongo_uploads.find({}, {"_id": 0, "object_id": 1})))
+        logger.info(msg=f"[list_all] ret:{ret}")
+        return ret
+    except Exception as e:
+        raise HTTPException(status_code=500,
+                            detail=f"! Exception {type(e)} occurred while retrieving object_ids for submitter=(message=[{e}] ! traceback={traceback.format_exc()}")
+    
     
 # API is described in:
 # http://localhost:8083/openapi.json
