@@ -1,3 +1,38 @@
 {
-  "object_id": "test_object_id"
+  "access_methods": null,
+  "aliases": null,
+  "checksums": null,
+  "contents": [
+    {
+      "contents": null,
+      "drs_uri": "('drs:///localhost:8083/fuse/fuse-provider-upload:8000/test_object_id',)/geneBySampleMatrix.csv",
+      "full_path": "for-testing/geneBySampleMatrix.csv",
+      "id": "geneBySampleMatrix.csv",
+      "name": "geneBySampleMatrix.csv"
+    },
+    {
+      "contents": null,
+      "drs_uri": "('drs:///localhost:8083/fuse/fuse-provider-upload:8000/test_object_id',)/phenoDataMatrix.csv",
+      "full_path": "for-testing/phenoDataMatrix.csv",
+      "id": "phenoDataMatrix.csv",
+      "name": "phenoDataMatrix.csv"
+    }
+  ],
+  "created_time": "xxx",
+  "data_type": "class_dataset_expression",
+  "description": null,
+  "file_type": "filetype_dataset_archive",
+  "id": "test_object_id",
+  "mime_type": "application/zip",
+  "name": "for-testing.zip",
+  "object_id": "test_object_id",
+  "self_uri": [
+    "drs:///localhost:8083/fuse/fuse-provider-upload:8000/test_object_id"
+  ],
+  "size": 337622,
+  "status": "finished",
+  "stderr": null,
+  "submitter_id": "test-xxx@email.com",
+  "updated_time": "xxx",
+  "version": "1.0"
 }

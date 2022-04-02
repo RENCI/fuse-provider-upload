@@ -58,14 +58,14 @@ generalize_output($fn, cmd("GET", rawf($fn), "service-info"), ["createdAt", "upd
 files_eq(f($fn), "t/out/${fn}",                                                    "($fn) Get config for this service");
 
 $fn = "write-1.json";
-files_eq(f($fn), cmd("POST", $fn, "submit?submitter_id=${SUBMITTER_ID}&requested_object_id=${OBJID}&data_type=class_dataset_expression&file_type=filetype_dataset_archive&version=1.0",
-		     "-F 'client_file=@./t/input/for-testing.zip;type=application/zip' -H 'Content-Type: multipart/form-data' -H 'accept: application/json'"),
-	                                                                                                   "($fn) Submit zip file");
+generalize_output($fn, cmd("POST", rawf($fn), "submit?submitter_id=${SUBMITTER_ID}&requested_object_id=${OBJID}&data_type=class_dataset_expression&file_type=filetype_dataset_archive&version=1.0", "-F 'client_file=@./t/input/for-testing.zip;type=application/zip' -H 'Content-Type: multipart/form-data' -H 'accept: application/json'"), ["created_time", "updated_time"]);
+files_eq(f($fn), "t/out/${fn}",                                                                            "($fn) Submit zip file");
+		     
 
 $fn = "write-1b.json";
-files_eq(f($fn), cmd("POST", $fn, "submit?submitter_id=${SUBMITTER_ID}&requested_object_id=${OBJID2}&data_type=class_dataset_expression&file_type=filetype_dataset_properties&version=1.0",
-		     "-F 'client_file=@./t/input/phenotypes.csv;type=application/csv' -H 'Content-Type: multipart/form-data' -H 'accept: application/json'"),
-	                                                                                                   "($fn) Submit csv file");
+generalize_output($fn, cmd("POST", rawf($fn), "submit?submitter_id=${SUBMITTER_ID}&requested_object_id=${OBJID2}&data_type=class_dataset_expression&file_type=filetype_dataset_properties&version=1.0", "-F 'client_file=@./t/input/phenotypes.csv;type=application/csv' -H 'Content-Type: multipart/form-data' -H 'accept: application/json'"), ["created_time", "updated_time"]);
+files_eq(f($fn), "t/out/${fn}",                                                                            "($fn) Submit csv file");
+
 
 $fn = "DRS-2.json";
 generalize_output($fn, cmd("GET", rawf($fn), "objects/{$OBJID}"), ["created_time", "updated_time"]);

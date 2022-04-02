@@ -271,19 +271,25 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
 
         assert _valid_contents(data_type, contents_list)
 
+        meta_data["size"] = os.path.getsize(file_path)
+        meta_data["updated_time"] = datetime.datetime.utcnow()
+        meta_data["mime_type"] = mime_type
+        meta_data["contents"] = contents_list
+        meta_data["status"] = "finished"
+
+        logger.info(msg=f"[upload] meta_data = {meta_data}")
         mongo_uploads.update_one({"object_id": object_id},
                                  {"$set": {
-                                     "size": os.path.getsize(file_path),
-                                     "updated_time": datetime.datetime.utcnow(),
-                                     "mime_type": mime_type,
-                                     "contents": contents_list,
-                                     "status": "finished"
+                                     "size": meta_data["size"],
+                                     "updated_time": meta_data["updated_time"],
+                                     "mime_type": meta_data["mime_type"],
+                                     "contents": meta_data["contents"],
+                                     "status": meta_data["status"]
                                  }})
         logger.info(msg=f"[upload] status of {object_id} updated to 'finished'")
         # maybe check here if the file is an archive, and if so, set the list of files attribute
-        ret_val = {"object_id": object_id}
-        logger.info(msg=f"[upload] Done. Returning: {ret_val}")
-        return ret_val
+        
+        return api_provider_object(object_id)
     
     except Exception as e:
         # assume the upload failed and update the status accordingly
@@ -447,7 +453,18 @@ async def service_info():
 
 # READ-ONLY endpoints follow the GA4GH DRS API, modeled below
 # https://editor.swagger.io/?url=https://ga4gh.github.io/data-repository-service-schemas/preview/release/drs-1.2.0/openapi.yaml
-    
+
+def api_provider_object(object_id: str):
+    entry = mongo_uploads.find({"object_id": object_id})
+    num_matches = _mongo_count(mongo_uploads, {"object_id": object_id})
+    logger.info(msg=f"[objects] total found for [{object_id}]={num_matches}")
+    assert num_matches == 1
+    logger.info(msg=f"[objects] found Object[{object_id}]={entry[0]}")
+    obj = entry[0]
+    del obj['_id']
+    return obj
+
+
 @app.get("/objects/{object_id}", summary="Get info about a DrsObject.")
 async def objects(object_id: str = Path(default="", description="DrsObject identifier"),
                   expand: bool = Query(default=False, description="If false and the object_id refers to a bundle, then the ContentsObject array contains only those objects directly contained in the bundle. That is, if the bundle contains other bundles, those other bundles are not recursively included in the result. If true and the object_id refers to a bundle, then the entire set of objects in the bundle is expanded. That is, if the bundle contains aother bundles, then those other bundles are recursively expanded and included in the result. Recursion continues through the entire sub-tree of the bundle. If the object_id refers to a blob, then the query parameter is ignored.")):
@@ -455,18 +472,8 @@ async def objects(object_id: str = Path(default="", description="DrsObject ident
     Returns object metadata, and a list of access methods that can be used to fetch object bytes.
     '''
     try:
-        entry = mongo_uploads.find({"object_id": object_id})
-        num_matches = _mongo_count(mongo_uploads, {"object_id": object_id})
-        logger.info(msg=f"[objects] total found for [{object_id}]={num_matches}")
-        assert num_matches == 1
-        logger.info(msg=f"[objects] found Object[{object_id}]={entry[0]}")
-        obj = entry[0]
-        del obj['_id']
-        # xxx how does this get validated?
-        return obj
+        return api_provider_object(object_id)
 
-        #example_object = ProviderExampleObject()
-        #return example_object.dict()
     except Exception as e:
         raise HTTPException(status_code=404,
                             detail="! Exception {type(e)} occurred while searching for ({object_id}), message=[{e}] \n! traceback=\n{traceback.format_exc()}")
@@ -522,3 +529,4 @@ async def post_objects(object_id: str=Path(default="", description="DrsObject id
 
 if __name__=='__main__':
         uvicorn.run("main:app", host='0.0.0.0', port=int(os.getenv("HOST_PORT")), reload=True )
+
