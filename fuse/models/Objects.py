@@ -146,6 +146,7 @@ class ProviderParameters(BaseModel):
     service_id: str = Field(..., title="Provider service id", description="id of service used to upload this object")
     submitter_id: EmailStr = Field(..., title="email", description="unique submitter id (email)")
     data_type: DataType = Field(..., title="Data type of this object", description="the type of data associated with this object (e.g, results or input dataset)")
+    file_type: FileType = Field(..., description="the type of file"),
     description: Optional[str] = Field(None, title="Description", description="detailed description of this data (optional)")
     version: Optional[str] = Field(None, title="Version of this object",
                                    description="objects shouldn't ever be deleted unless data are redacted or there is a database consistency problem.")
