@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse
 
 from fuse.models.Config import LogConfig
-from fuse.models.Objects import Passports, ProviderExampleObject, DataType, FileType
+from fuse.models.Objects import Passports, ProviderExampleObject, DataType, FileType, ProviderParameters
 
 dictConfig(LogConfig().dict())
 logger = logging.getLogger("fuse-provider-upload")
@@ -111,23 +111,19 @@ def _file_path(object_id):
     return os.path.join(local_path, f"{object_id}-data")
 
 
-
-# SHARED
 def _gen_object_id(prefix, submitter_id, requested_object_id, coll):
     try:
         object_id = f"{prefix}_{submitter_id}_{uuid.uuid4()}"
-        assert requested_object_id is not None
-        logger.info(f"top prefex={prefix}, submitter={submitter_id}, requested:{requested_object_id}")
-        entry = coll.find({"object_id": requested_object_id},
-                          {"_id": 0, "object_id": 1})
-        num_matches = _mongo_count(coll, {"object_id": requested_object_id})
-        logger.info(f"found ({num_matches}) matches for requested object_id={requested_object_id}")
-        assert num_matches == 0
-        return requested_object_id
-    except Exception as e:
-        logger.warning(
-            f"? Exception {type(e)} occurred when using {requested_object_id}, using {object_id} instead. message=[{e}] ! traceback={traceback.format_exc()}")
+        if requested_object_id is not None:
+            logger.info(f"top prefex={prefix}, submitter={submitter_id}, requested:{requested_object_id}")
+            entry = coll.find({"object_id": requested_object_id}, {"_id": 0, "object_id": 1})
+            num_matches = _mongo_count(coll, {"object_id": requested_object_id})
+            if num_matches >= 1:
+                logger.info(f"found ({num_matches}) matches for requested object_id={requested_object_id}")
+                return requested_object_id
         return object_id
+    except Exception as e:
+        logger.exception(f"? Exception {type(e)} occurred when using {requested_object_id}, using {object_id} instead. message=[{e}] ! traceback={traceback.format_exc()}")
 
 
 @app.post("/admin/objects", description="Admin function for listing all objects. Useful for debugging database inconsistencies")
@@ -149,17 +145,8 @@ async def list_all():
 # for example, an array of parameter names can be retrieved with:
 # curl -X 'GET'    'http://localhost:8083/openapi.json' -H 'accept: application/json' 2> /dev/null |python -m json.tool |jq '.paths."/submit".post.parameters[].name' 
 @app.post("/submit", description="Submit a digital object to be stored by this data provider")
-async def upload(submitter_id: str = Query(default=..., description="unique identifier for the submitter (e.g., email)"),
-                 data_type: DataType = Query(default=..., description="the type of data; options are: class_dataset_expression, class-results_PCATable, class_results_CellFIE."),
-                 file_type: FileType = Query(default=..., description="the type of file"),
-                 description: Optional[str] = Query(default=None, description="optional description of this object"),
-                 version: Optional[str] = Query(default="1.0", description="version of this object; objects should never be deleted unless data are redacted"),
-                 aliases: Optional[str] = Query(default=None, description="optional list of aliases for this object"),
-                 checksums: Optional[List] = Query(default=None,
-                                                   description="optional checksums for the object, enabling verification checking by clients; this is a json list of objects, each object contains 'checksum' and 'type' fields, where 'type' might be 'sha-256' for example."),
-                 requested_object_id: str = Query(default=None,
-                                                  description="optional argument to be used by submitter to request an object_id; this could be, for example, used to retrieve objects from a 3rd party for which this endpoint is a proxy. The requested object_id is not guaranteed, enduser should check return value for final object_id used."),
-                 client_file: UploadFile = File(...)):
+async def upload(parameters: ProviderParameters = Depends(ProviderParameters.as_form), client_file: UploadFile = File(...)):
+    logger.info(f"parameters: {parameters}")
     '''
     Please notes:
     - mime-type: mime types are limited to text, csv, and archive
@@ -168,7 +155,7 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
     '''
     try:
         # xxx use _gen_object_id here, but first replace _mongo_count signature to remove {fn}, projection file-wide
-        object_id = _gen_object_id("upload", submitter_id, requested_object_id, mongo_uploads)
+        object_id = _gen_object_id("upload", parameters.submitter_id, parameters.requested_object_id, mongo_uploads)
 
         logger.info(f"object_id={object_id}")
         logger.info(f"client file_name={client_file.filename}")
@@ -179,20 +166,20 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
         meta_data = {"object_id": object_id,
                      "id": object_id,
                      "name": client_file.filename,
-                     "description": description,
+                     "description": parameters.description,
                      "self_uri": drs_uri,
                      "size": None,
                      "created_time": datetime.datetime.utcnow(),
                      "updated_time": None,
-                     "version": version,
+                     "version": parameters.version,
                      "mime_type": None,
-                     "aliases": aliases,
-                     "checksums": checksums,
+                     "aliases": parameters.aliases,
+                     "checksums": parameters.checksums,
                      "access_methods": None,
                      "contents": None,
-                     "data_type": data_type,
-                     "submitter_id": submitter_id,
-                     "file_type": file_type,
+                     "data_type": parameters.data_type,
+                     "submitter_id": parameters.submitter_id,
+                     "file_type": parameters.file_type,
                      "status": "started",
                      "stderr": None
                      }
@@ -226,13 +213,8 @@ async def upload(submitter_id: str = Query(default=..., description="unique iden
                 logger.info(f"  subfile_name = {subfile_name}")
                 subfile_drs_uri = f"{drs_uri}/{subfile_name}"
                 logger.info(f"  subfile_drs_uri={subfile_drs_uri}")
-                file_obj = {}
-                file_obj["id"] = subfile_name
-                file_obj["name"] = subfile_name
-                file_obj["drs_uri"] = subfile_drs_uri
-                file_obj["contents"] = None
+                file_obj = {"id": subfile_name, "name": subfile_name, "drs_uri": subfile_drs_uri, "contents": None, "full_path": subfile_path}
                 # full_path is format: archive_name/file_name
-                file_obj["full_path"] = subfile_path
                 # use full_path to extract from archive; e.g.:
                 #   with zip.open(full_path) as f:
                 #     f.read()
