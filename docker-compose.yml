@@ -9,9 +9,9 @@ services:
     ports:
       - ${HOST_PORT}:${CONTAINER_PORT}
     volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-        - ./service_info.json:/app/service_info.json
-        - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - $PWD/service_info.json:/app/service_info.json
+      - upload-data:/app/data
     networks:
       - upload_network
 
@@ -22,7 +22,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data/db:/data/db
+      - upload-tx-persistence-db:/data/db
     expose:
       - 27017
       - 27018
@@ -34,3 +34,9 @@ networks:
   upload_network:
     name: ${CONTAINER_NETWORK}
     external: true
+
+volumes:
+  upload-tx-persistence-db:
+    name: upload-tx-persistence-db
+  upload-data:
+    name: upload-data
