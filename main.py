@@ -106,9 +106,6 @@ def _mongo_count(coll, obj):
 # end mongo migration functions
 
 
-def _file_path(object_id):
-    local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-    return os.path.join(local_path, f"{object_id}-data")
 
 
 def _gen_object_id(prefix, submitter_id, requested_object_id, coll):
@@ -187,7 +184,7 @@ async def upload(parameters: ProviderParameters = Depends(ProviderParameters.as_
         row_id = mongo_uploads.insert_one(meta_data).inserted_id
         logger.info(f"new row_id = {row_id}")
 
-        local_path = _file_path(object_id)
+        local_path = os.path.abspath(f"/app/data/{object_id}-data")
         os.mkdir(local_path)
         logger.info(f"localpath = {local_path}")
         file_path = os.path.join(local_path, client_file.filename)
@@ -344,7 +341,7 @@ async def delete(object_id: str):
 @app.get("/files/{object_id}")
 def get_file(object_id: str):
     try:
-        file_path = _file_path(object_id)
+        file_path = os.path.abspath(f"/app/data/{object_id}-data")
         logger.info(f"Retrieving {object_id} at {file_path}")
 
         assert os.path.isdir(file_path)
@@ -398,8 +395,7 @@ async def service_info():
     ```
     See the Service Registry Appendix for more information on how to register a DRS service with a service registry.
     '''
-    service_info_path = pathlib.Path(__file__).parent / "service_info.json"
-    with open(service_info_path) as f:
+    with open("/app/service_info.json") as f:
         return json.load(f)
 
 
