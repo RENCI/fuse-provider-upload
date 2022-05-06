@@ -7,7 +7,7 @@ services:
     restart: always
     env_file: .env
     ports:
-      - ${HOST_PORT}:${CONTAINER_PORT}
+      - ${API_PORT}:${API_PORT}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - $PWD/service_info.json:/app/service_info.json

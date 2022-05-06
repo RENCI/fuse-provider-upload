@@ -27,10 +27,10 @@ logger = logging.getLogger("fuse-provider-upload")
 # https://stackoverflow.com/questions/63510041/adding-python-logging-to-fastapi-endpoints-hosted-on-docker-doesnt-display-api
 
 g_host_name = os.getenv('HOST_NAME')
-g_host_port = os.getenv('HOST_PORT')
+g_host_port = os.getenv('API_PORT')
 g_container_network = os.getenv('CONTAINER_NETWORK')
 g_container_name = os.getenv('CONTAINER_NAME')
-g_container_port = os.getenv('CONTAINER_PORT')
+g_container_port = os.getenv('API_PORT')
 
 g_api_version = "0.0.1"
 
