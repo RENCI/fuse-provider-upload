@@ -13,6 +13,7 @@ from fastapi import FastAPI, Depends, Path, Query, Body, File, UploadFile
 from fastapi import  Form, HTTPException
 from fastapi.logger import logger
 from fastapi.middleware.cors import CORSMiddleware
+from fuse_utilities.main import DataType, FileType
 from starlette.responses import StreamingResponse
 
 from bson.json_util import dumps, loads
@@ -21,7 +22,7 @@ import traceback
 
 import zipfile
 
-from fuse.models.Objects import Passports, ProviderExampleObject, Checksums
+from fuse.models.Objects import ProviderExampleObject, Checksums
 from logging.config import dictConfig
 import logging
 from fuse.models.Config import LogConfig
@@ -115,21 +116,7 @@ def _file_path(object_id):
     return os.path.join(local_path, f"{object_id}-data")
 
 # SHARED
-# xxx cdm
-from enum import Enum
-class DataType(str, Enum):
-    geneExpression='class_dataset_expression'
-    resultsPCATable='class_results_PCATable'
-    resultsCellFIE='class_results_CellFIE'
-    # xxx to add more datatypes: expand this
 
-class FileType(str, Enum):
-    datasetGeneExpression='filetype_dataset_expression'
-    datasetProperties='filetype_dataset_properties'
-    datasetArchive='filetype_dataset_archive'
-    resultsPCATable='filetype_results_PCATable'
-    resultsCellFIE='filetype_results_CellFIE'
-    # xxx to add more datatypes: expand this
 
 def _valid_contents(data_type, contents_list):
     if data_type == DataType.geneExpression:
@@ -311,7 +298,7 @@ async def objects_search(submitter_id: str = Path(default="", description="submi
     
     except Exception as e:
         raise HTTPException(status_code=404,
-                            detail=f"! Exception {type(e)} occurred while searching for ({object_id}), message=[{e}] \n! traceback=\n{traceback.format_exc()}")
+                            detail=f"! Exception {type(e)} occurred while searching for ({submitter_id}), message=[{e}] \n! traceback=\n{traceback.format_exc()}")
                        
 
 @app.delete("/delete/{object_id}", summary="DANGER ZONE: Delete a downloaded object; this action is rarely justified.")
