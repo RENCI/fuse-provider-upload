@@ -2,13 +2,11 @@ import datetime
 import json
 import logging
 import os
-import pathlib
 import shutil
 import traceback
 import uuid
 import zipfile
 from logging.config import dictConfig
-from typing import List, Optional
 
 import aiofiles
 import magic
@@ -17,10 +15,11 @@ import uvicorn
 from fastapi import FastAPI, Depends, Path, Query, File, UploadFile
 from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fuse_cdm.main import ProviderParameters, Passports
 from starlette.responses import StreamingResponse
 
 from fuse.models.Config import LogConfig
-from fuse.models.Objects import Passports, ProviderExampleObject, DataType, FileType, ProviderParameters
+from fuse.models.Objects import ProviderExampleObject
 
 dictConfig(LogConfig().dict())
 logger = logging.getLogger("fuse-provider-upload")
@@ -106,8 +105,6 @@ def _mongo_count(coll, obj):
 # end mongo migration functions
 
 
-
-
 def _gen_object_id(prefix, submitter_id, requested_object_id, coll):
     try:
         object_id = f"{prefix}_{submitter_id}_{uuid.uuid4()}"
@@ -166,6 +163,7 @@ async def upload(parameters: ProviderParameters = Depends(ProviderParameters.as_
                      "description": parameters.description,
                      "self_uri": drs_uri,
                      "size": None,
+                     "dimension": None,
                      "created_time": datetime.datetime.utcnow(),
                      "updated_time": None,
                      "version": parameters.version,
@@ -180,6 +178,7 @@ async def upload(parameters: ProviderParameters = Depends(ProviderParameters.as_
                      "status": "started",
                      "stderr": None
                      }
+
         logger.info(f"new object metatdata = {meta_data}")
         row_id = mongo_uploads.insert_one(meta_data).inserted_id
         logger.info(f"new row_id = {row_id}")
@@ -199,6 +198,18 @@ async def upload(parameters: ProviderParameters = Depends(ProviderParameters.as_
         logger.info(f"file type = {mime_type}")
         assert (
                 mime_type == 'application/zip' or mime_type == 'application/csv' or mime_type == 'application/json' or mime_type == 'text/csv' or mime_type == 'text/plain' or 'application/vnd.ms-excel')
+
+        if mime_type == 'application/csv' or mime_type == 'text/csv':
+            with open(file_path) as f:
+                number_of_columns = len(f.readline().rstrip().split(sep=",")) - 1
+            f.close()
+
+            with open(file_path) as f:
+                number_of_rows = len(f.readlines())
+            f.close()
+
+            dimension = f"{number_of_rows}x{number_of_columns}"
+            meta_data["dimension"] = dimension
 
         contents_list = []
         if mime_type == 'application/zip':
