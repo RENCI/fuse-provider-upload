@@ -199,7 +199,7 @@ async def upload(parameters: ProviderParameters = Depends(ProviderParameters.as_
         assert (
                 mime_type == 'application/zip' or mime_type == 'application/csv' or mime_type == 'application/json' or mime_type == 'text/csv' or mime_type == 'text/plain' or 'application/vnd.ms-excel')
 
-        if mime_type == 'application/csv' or mime_type == 'text/csv':
+        if mime_type in ['text/csv', 'application/csv', 'text/plain']:
             with open(file_path) as f:
                 number_of_columns = len(f.readline().rstrip().split(sep=",")) - 1
             f.close()
