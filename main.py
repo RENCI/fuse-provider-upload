@@ -238,6 +238,7 @@ async def upload(parameters: ProviderParameters = Depends(ProviderParameters.as_
         mongo_uploads.update_one({"object_id": object_id},
                                  {"$set": {
                                      "size": meta_data["size"],
+                                     "dimension": meta_data["dimension"],
                                      "updated_time": meta_data["updated_time"],
                                      "mime_type": meta_data["mime_type"],
                                      "contents": meta_data["contents"],
